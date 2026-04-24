@@ -47,7 +47,7 @@ document.addEventListener('keydown',e=>{
   if(state==='title'){startGame();return;}
   if(!K[e.code])KP[e.code]=true;
   K[e.code]=true;
-  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyX','KeyQ'].includes(e.code))e.preventDefault();
   if(e.code==='KeyR')init();
 });
 document.getElementById('c').addEventListener('click',()=>{if(state==='title')startGame();});
@@ -64,12 +64,12 @@ function hud(){
   document.getElementById('hCoins').textContent='×'+String(p1.coins).padStart(2,'0');
   document.getElementById('hWorld').textContent=lv.name;
   document.getElementById('hTime').textContent=Math.ceil(timer);
-  document.getElementById('hLives').textContent='×'+p1.lives;
+  document.getElementById('hLives').textContent=p1.outOfLives?'OUT':'×'+p1.lives;
   document.getElementById('hPower').textContent=PWR[p1.power]||'SMALL';
   document.getElementById('hAmmo').textContent=ammoStr(p1.ammo);
   document.getElementById('h2Score').textContent=String(p2.score).padStart(6,'0');
   document.getElementById('h2Coins').textContent='×'+String(p2.coins).padStart(2,'0');
-  document.getElementById('h2Lives').textContent='×'+p2.lives;
+  document.getElementById('h2Lives').textContent=p2.outOfLives?'OUT':'×'+p2.lives;
   document.getElementById('h2Power').textContent=PWR[p2.power]||'SMALL';
   document.getElementById('h2Ammo').textContent=ammoStr(p2.ammo);
 }
@@ -77,7 +77,7 @@ function hud(){
 // ── PLAYER FACTORY ───────────────────────────────────────────────────────
 function mkPlayer(x,y,num){
   return{x,y,w:26,h:36,vx:0,vy:0,onGround:false,jumps:0,
-    facing:1,wf:0,wt:0,invincible:0,dead:false,pipeTimer:0,
+    facing:1,wf:0,wt:0,invincible:0,dead:false,outOfLives:false,pipeTimer:0,
     num,power:0,score:0,coins:0,lives:3,
     ammo:5,maxAmmo:5,ammoTimer:0,
     fireCD:0,cpReached:false};
@@ -428,20 +428,35 @@ function updPlayer(p,isP1){
   }
 
   if(p.dead){
-    p.vy+=GR;p.y+=p.vy;
-    if(p.y>H+200){
-      p.lives--;
-      if(p1.lives<=0&&p2.lives<=0){state='gameover';showOv('GAME OVER','#f55','Press R to restart');}
-      else{p.x=cpX||2*T;p.y=GY-50;p.vx=0;p.vy=0;p.dead=false;p.invincible=120;p.jumps=0;}
-      hud();
+    if(!p.outOfLives){p.vy+=GR;p.y+=p.vy;}
+    if(!p.outOfLives&&p.y>H+200){
+      p.lives--;hud();
+      if(p.lives<=0){
+        p.outOfLives=true;
+        if(p1.outOfLives&&p2.outOfLives){state='gameover';showOv('GAME OVER','#f55','Press R to restart');}
+      }else{p.x=cpX||2*T;p.y=GY-50;p.vx=0;p.vy=0;p.dead=false;p.invincible=120;p.jumps=0;}
+    }
+    // Revive check: other player presses E (P1 revives P2) or I (P2 revives P1)
+    if(p.outOfLives){
+      const reviver=p===p2?p1:p2;
+      const revKey=p===p2?'KeyE':'KeyI';
+      if(KP[revKey]&&!reviver.dead&&!reviver.outOfLives&&reviver.coins>=15){
+        reviver.coins-=15;hud();
+        p.outOfLives=false;p.dead=false;p.lives=1;
+        p.x=reviver.x+(reviver.facing>0?T*2:-T*2);p.y=GY-80;
+        p.vx=0;p.vy=-8;p.invincible=180;p.jumps=0;p.power=0;p.ammo=5;p.ammoTimer=0;
+        popup(p.x+13,p.y-16,p===p1?'P1 REVIVED!':'P2 REVIVED!','#0f0');
+        spawnPtcl(p.x+13,p.y+18,'#0f0',18);
+      }
     }
     return;
   }
   if(p.invincible>0)p.invincible--;
 
+  if(p.fireCD>0)p.fireCD--;
   let left,right,jump,down,fire;
-  if(isP1){left=K.ArrowLeft;right=K.ArrowRight;jump=KP.ArrowUp||KP.KeyZ;down=K.ArrowDown;fire=KP.KeyX;}
-  else{left=K.KeyA;right=K.KeyD;jump=KP.KeyW;down=K.KeyS;fire=KP.KeyQ;}
+  if(isP1){left=K.ArrowLeft;right=K.ArrowRight;jump=KP.ArrowUp||KP.KeyZ;down=K.ArrowDown;fire=K.KeyX&&p.fireCD===0;}
+  else{left=K.KeyA;right=K.KeyD;jump=KP.KeyW;down=K.KeyS;fire=K.KeyQ&&p.fireCD===0;}
 
   // Pipe
   if(down&&p.onGround&&p.pipeTimer===0){
@@ -570,10 +585,14 @@ function updPlayer(p,isP1){
   }
 
   // Shoot fireball
-  if(fire&&p.power===2&&p.ammo>0){
-    p.ammo--;p.ammoTimer=0;hud();
-    fireballs.push({x:p.x+(p.facing>0?p.w:0),y:p.y+p.h*.4,vx:p.facing*10,vy:1,alive:true,bounces:5,owner:p.num,r:7});
-    spawnPtcl(p.x+(p.facing>0?p.w+4:-4),p.y+p.h*.4,p.num===1?'#f80':'#4f4',4);
+  if(fire){
+    if(p.power<2){popup(p.x+13,p.y-10,'Need Fire Flower!','#fa0');}
+    else if(p.ammo<=0){popup(p.x+13,p.y-10,'Reloading...','#88f');}
+    else{
+      p.ammo--;p.ammoTimer=0;p.fireCD=14;hud();
+      fireballs.push({x:p.x+(p.facing>0?p.w+2:-2),y:p.y+p.h*.35,vx:p.facing*11,vy:-1,alive:true,bounces:5,owner:p.num,r:7});
+      spawnPtcl(p.x+(p.facing>0?p.w+4:-4),p.y+p.h*.35,p.num===1?'#f80':'#4f4',4);
+    }
   }
 
   if(Math.abs(p.vx)>.4){p.wt++;if(p.wt>4){p.wf=(p.wf+1)%6;p.wt=0;}}else p.wf=0;
@@ -1485,6 +1504,24 @@ function loop(){
     const px=Math.max(14,Math.min(p2.x-camX,W-28));
     ctx.fillStyle='rgba(40,180,40,.85)';ctx.beginPath();ctx.roundRect(px-12,14,26,11,[4]);ctx.fill();
     ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText('P2',px,21);
+  }
+  // Revive prompts
+  const pulse=.7+Math.sin(tick*.12)*.3;
+  if(p2.outOfLives&&!p1.outOfLives){
+    const canR=p1.coins>=15;
+    ctx.globalAlpha=pulse;
+    ctx.fillStyle=canR?'#00ff88':'#ff4444';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=14;
+    ctx.font='bold 15px Arial';ctx.textAlign='center';
+    ctx.fillText(canR?'Press E — Revive P2 (15 coins)':'P2 is OUT! P1 needs 15 coins to revive',W/2,H-18);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+  if(p1.outOfLives&&!p2.outOfLives){
+    const canR=p2.coins>=15;
+    ctx.globalAlpha=pulse;
+    ctx.fillStyle=canR?'#00ff88':'#ff4444';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=14;
+    ctx.font='bold 15px Arial';ctx.textAlign='center';
+    ctx.fillText(canR?'Press I — Revive P1 (15 coins)':'P1 is OUT! P2 needs 15 coins to revive',W/2,H-18);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
   }
   requestAnimationFrame(loop);
 }
