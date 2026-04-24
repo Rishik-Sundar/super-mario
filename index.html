@@ -44,17 +44,23 @@ const W=800,H=432,T=32,GR=0.52,GY=H-T;
 // ── INPUT: track pressed-this-frame separately ──────────────────────────
 const K={},KP={};
 document.addEventListener('keydown',e=>{
-  if(state==='title'){startGame();return;}
+  if(state==='title'){
+    if(e.code==='Digit1'){gameMode='1p';startGame();}
+    else{gameMode='2p';startGame();}
+    return;
+  }
   if(!K[e.code])KP[e.code]=true;
   K[e.code]=true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyX','KeyQ'].includes(e.code))e.preventDefault();
   if(e.code==='KeyR')init();
 });
-document.getElementById('c').addEventListener('click',()=>{if(state==='title')startGame();});
+document.getElementById('c').addEventListener('click',()=>{if(state==='title'){gameMode='2p';startGame();}});
 document.addEventListener('keyup',e=>{delete K[e.code];});
 
 let state,camX,particles,popups,coinAnims,fireballs,powerups,lv,timer,timerTick,cpX,worldIdx;
 let p1,p2;
+let gameMode='2p'; // '1p' or '2p'
+let cam1X=0,cam2X=0;
 
 // ── HUD ─────────────────────────────────────────────────────────────────
 const PWR=['SMALL','BIG','FIRE'];
@@ -98,9 +104,8 @@ function moveY(e,solids){
   e.y+=e.vy;e.onGround=false;
   for(const s of solids){
     if(e.x+e.w<=s.x||e.x>=s.x+s.w||e.y+e.h<=s.y||e.y>=s.y+s.h)continue;
-    const oT=e.y+e.h-s.y,oB=s.y+s.h-e.y;
-    if(oT<oB){e.y=s.y-e.h;e.vy=0;e.onGround=true;}
-    else{e.y=s.y+s.h;if(e.vy<0)e.vy=0.5;}
+    if(e.vy<=0){e.y=s.y+s.h;if(e.vy<0)e.vy=0.5;} // moving up: hit from below
+    else{e.y=s.y-e.h;e.vy=0;e.onGround=true;} // falling: land on top
     return s;
   }
 }
@@ -116,208 +121,149 @@ const DEFS={
 '1-1':{LW:135,name:'1-1',bg:'day',
   pits:[[22,25],[47,50],[72,75],[104,107]],
   bricks:[
-    // Near start - lots of low platforms
-    [3,11],[4,11],[5,11],[6,11],[7,11],[8,11],
-    [4,9],[5,9],[6,9],[7,9],
-    [10,11],[11,11],[12,11],[13,11],
-    [15,11],[16,11],[17,11],[18,11],[19,11],
-    [16,9],[17,9],[18,9],
-    // Mid section
-    [26,11],[27,11],[28,11],[29,11],[30,11],[31,11],
-    [27,9],[28,9],[29,9],[30,9],
-    [33,11],[34,11],[35,11],[36,11],
-    [38,11],[39,11],[40,11],[41,11],[42,11],
-    [39,9],[40,9],[41,9],
-    [44,11],[45,11],[46,11],
-    // After pit 2
-    [51,11],[52,11],[53,11],[54,11],[55,11],[56,11],
-    [52,9],[53,9],[54,9],[55,9],
-    [58,11],[59,11],[60,11],
-    [62,11],[63,11],[64,11],[65,11],[66,11],
-    [63,9],[64,9],[65,9],
-    [68,11],[69,11],[70,11],
-    // After pit 3
-    [76,11],[77,11],[78,11],[79,11],[80,11],[81,11],
-    [77,9],[78,9],[79,9],[80,9],
-    [83,11],[84,11],[85,11],[86,11],
-    [88,11],[89,11],[90,11],[91,11],[92,11],
-    [89,9],[90,9],[91,9],
-    [94,11],[95,11],[96,11],[97,11],
-    [99,11],[100,11],[101,11],[102,11],[103,11],
-    // After pit 4 - extended section
-    [108,11],[109,11],[110,11],[111,11],[112,11],
-    [109,9],[110,9],[111,9],
-    [114,11],[115,11],[116,11],[117,11],
-    [119,11],[120,11],[121,11],[122,11],[123,11],
-    [120,9],[121,9],[122,9],
-    [125,11],[126,11],[127,11],
-    [129,11],[130,11],[131,11],[132,11],
+    [3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],
+    [14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],
+    [25,10],[26,10],[27,10],[28,10],[29,10],[30,10],[31,10],[32,10],[33,10],[34,10],[35,10],
+    [38,10],[39,10],[40,10],[41,10],[42,10],[43,10],[44,10],[45,10],[46,10],
+    [50,10],[51,10],[52,10],[53,10],[54,10],[55,10],[56,10],[57,10],[58,10],[59,10],
+    [62,10],[63,10],[64,10],[65,10],[66,10],[67,10],[68,10],[69,10],[70,10],[71,10],
+    [75,10],[76,10],[77,10],[78,10],[79,10],[80,10],[81,10],[82,10],[83,10],[84,10],[85,10],[86,10],[87,10],[88,10],[89,10],
+    [92,10],[93,10],[94,10],[95,10],[96,10],[97,10],[98,10],[99,10],[100,10],[101,10],[102,10],[103,10],
+    [107,10],[108,10],[109,10],[110,10],[111,10],[112,10],[113,10],[114,10],[115,10],[116,10],[117,10],
+    [118,10],[119,10],[120,10],[121,10],[122,10],[123,10],[124,10],[125,10],[126,10],[127,10],[128,10],
+    [129,10],[130,10],[131,10],[132,10],[133,10],[134,10],
   ],
   qdata:[
-    [6,10,3,false],[11,10,3,true],[17,10,3,false],
-    [29,10,5,true],[40,10,3,false],[54,10,3,true],
-    [64,10,5,true],[79,10,3,false],[91,10,5,true],
-    [110,10,3,true],[121,10,5,true],[131,10,3,false],
+    [9,7,3,false],[17,7,3,true],[28,7,5,true],[40,7,3,false],
+    [56,7,3,true],[67,7,5,true],[82,7,3,false],[95,7,5,true],
+    [115,7,3,true],[128,7,5,true],
   ],
   pipes:[
-    {tx:12,h:2,dest:'1-2',spawn:[3,GY-50]},
-    {tx:35,h:2,dest:'1-2',spawn:[3,GY-50]},
-    {tx:58,h:3,dest:null},
-    {tx:88,h:2,dest:'1-2',spawn:[3,GY-50]},
-    {tx:112,h:2,dest:null},
+    {tx:12,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:36,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:60,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:90,h:2,dest:'1-2',spawn:[3*T,GY-50]},
   ],
-  piranhas:[[58,3],[112,2]],
   enemies:[
-    [6,'goomba'],[11,'goomba'],[16,'koopa'],[21,'goomba'],
-    [27,'goomba'],[31,'koopa'],[39,'goomba'],[42,'goomba'],
-    [53,'koopa'],[63,'goomba'],[67,'koopa'],
-    [77,'goomba'],[83,'goomba'],[90,'koopa'],[95,'goomba'],
-    [109,'goomba'],[113,'koopa_fly'],[120,'goomba'],[124,'koopa'],
+    [5,'goomba'],[9,'goomba'],[16,'koopa'],[20,'goomba'],
+    [26,'goomba'],[30,'koopa'],[39,'goomba'],[43,'goomba'],
+    [53,'koopa'],[63,'goomba'],[68,'koopa'],
+    [77,'goomba'],[84,'goomba'],[93,'koopa'],[98,'goomba'],
+    [110,'goomba'],[114,'koopa_fly'],[122,'goomba'],[126,'koopa'],
   ],
   checkpoints:[[65]],flag:[131]},
 
 '1-2':{LW:52,name:'1-2',bg:'underground',ceiling:true,gtype:'stone',
   bricks:[
-    [4,10],[5,10],[6,10],[7,10],[8,10],[9,10],
-    [11,8],[12,8],[13,8],[14,8],[15,8],[16,8],
-    [18,10],[19,10],[20,10],[21,10],[22,10],
-    [24,8],[25,8],[26,8],[27,8],[28,8],
-    [30,10],[31,10],[32,10],[33,10],[34,10],[35,10],
-    [37,8],[38,8],[39,8],[40,8],[41,8],
-    [43,10],[44,10],[45,10],[46,10],[47,10],
-    [49,8],[50,8],
+    [3,9],[4,9],[5,9],[6,9],[7,9],
+    [10,9],[11,9],[12,9],[13,9],[14,9],
+    [17,9],[18,9],[19,9],[20,9],[21,9],
+    [24,9],[25,9],[26,9],[27,9],[28,9],
+    [31,9],[32,9],[33,9],[34,9],[35,9],
+    [38,9],[39,9],[40,9],[41,9],[42,9],
+    [45,9],[46,9],[47,9],[48,9],[49,9],
   ],
   qdata:[
-    [6,9,5,true],[13,7,5,true],[21,9,5,false],
-    [27,7,7,true],[34,9,5,false],[41,7,5,true],[47,9,5,true],
+    [6,6,5,true],[14,6,5,false],[21,6,7,true],
+    [28,6,5,false],[35,6,5,true],[42,6,7,true],[49,6,5,false],
   ],
   pipes:[{tx:2,h:2,exit:true,dest:'1-1',spawn:[14*T,GY-50]}],
   enemies:[
-    [8,'goomba'],[14,'goomba'],[21,'koopa'],[27,'goomba'],
-    [35,'goomba'],[37,'goomba'],[43,'koopa'],[49,'goomba'],
+    [7,'goomba'],[13,'goomba'],[20,'koopa'],[26,'goomba'],
+    [33,'goomba'],[40,'koopa'],[47,'goomba'],
   ],
   checkpoints:[[26]]},
 
 '2-1':{LW:148,name:'2-1',bg:'desert',
   pits:[[18,21],[44,47],[70,73],[104,107],[130,133]],
   bricks:[
-    [3,11],[4,11],[5,11],[6,11],[7,11],[8,11],
-    [4,9],[5,9],[6,9],[7,9],
-    [10,11],[11,11],[12,11],[13,11],
-    [15,11],[16,11],[17,11],
-    [22,11],[23,11],[24,11],[25,11],[26,11],[27,11],
-    [23,9],[24,9],[25,9],[26,9],
-    [29,11],[30,11],[31,11],[32,11],
-    [34,11],[35,11],[36,11],[37,11],[38,11],[39,11],
-    [35,9],[36,9],[37,9],[38,9],
-    [41,11],[42,11],[43,11],
-    [48,11],[49,11],[50,11],[51,11],[52,11],
-    [49,9],[50,9],[51,9],
-    [54,11],[55,11],[56,11],[57,11],
-    [59,11],[60,11],[61,11],[62,11],[63,11],[64,11],
-    [60,9],[61,9],[62,9],[63,9],
-    [66,11],[67,11],[68,11],
-    [74,11],[75,11],[76,11],[77,11],[78,11],[79,11],
-    [75,9],[76,9],[77,9],[78,9],
-    [81,11],[82,11],[83,11],[84,11],
-    [86,11],[87,11],[88,11],[89,11],[90,11],
-    [87,9],[88,9],[89,9],
-    [92,11],[93,11],[94,11],[95,11],
-    [97,11],[98,11],[99,11],[100,11],[101,11],[102,11],
-    [98,9],[99,9],[100,9],[101,9],
-    [108,11],[109,11],[110,11],[111,11],[112,11],
-    [109,9],[110,9],[111,9],
-    [114,11],[115,11],[116,11],[117,11],
-    [119,11],[120,11],[121,11],[122,11],[123,11],
-    [120,9],[121,9],[122,9],
-    [125,11],[126,11],[127,11],[128,11],
-    [134,11],[135,11],[136,11],[137,11],[138,11],
-    [135,9],[136,9],[137,9],
-    [140,11],[141,11],[142,11],[143,11],[144,11],
-    [141,9],[142,9],[143,9],
+    [3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],
+    [16,10],[17,10],
+    [21,10],[22,10],[23,10],[24,10],[25,10],[26,10],[27,10],[28,10],[29,10],[30,10],
+    [31,10],[32,10],[33,10],[34,10],[35,10],[36,10],[37,10],[38,10],[39,10],[40,10],
+    [43,10],
+    [47,10],[48,10],[49,10],[50,10],[51,10],[52,10],[53,10],[54,10],[55,10],[56,10],
+    [57,10],[58,10],[59,10],[60,10],[61,10],[62,10],[63,10],[64,10],[65,10],[66,10],
+    [69,10],
+    [73,10],[74,10],[75,10],[76,10],[77,10],[78,10],[79,10],[80,10],[81,10],[82,10],
+    [83,10],[84,10],[85,10],[86,10],[87,10],[88,10],[89,10],[90,10],[91,10],[92,10],
+    [93,10],[94,10],[95,10],
+    [98,10],[99,10],[100,10],[101,10],[102,10],[103,10],
+    [107,10],[108,10],[109,10],[110,10],[111,10],[112,10],[113,10],[114,10],[115,10],
+    [116,10],[117,10],[118,10],[119,10],[120,10],[121,10],[122,10],[123,10],[124,10],
+    [125,10],[126,10],[127,10],[128,10],[129,10],
+    [133,10],[134,10],[135,10],[136,10],[137,10],[138,10],[139,10],[140,10],[141,10],
+    [142,10],[143,10],[144,10],[145,10],[146,10],[147,10],
   ],
   qdata:[
-    [5,10,3,true],[11,10,3,false],[16,10,5,true],
-    [25,10,3,false],[36,10,5,true],[50,10,3,true],
-    [61,10,5,true],[76,10,3,false],[88,10,5,true],
-    [99,10,3,true],[110,10,5,true],[121,10,3,false],
-    [136,10,5,true],[142,10,3,true],
+    [9,7,3,true],[17,7,5,false],[27,7,3,true],[35,7,5,true],
+    [55,7,3,false],[62,7,5,true],[78,7,3,false],[88,7,5,true],
+    [110,7,3,true],[122,7,5,true],[140,7,3,false],
   ],
   pipes:[
-    {tx:14,h:3,dest:null},{tx:41,h:2,dest:'2-2',spawn:[3,GY-50]},
-    {tx:67,h:3,dest:null},{tx:96,h:2,dest:'2-2',spawn:[3,GY-50]},
-    {tx:124,h:3,dest:null},{tx:143,h:2,dest:null},
+    {tx:14,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:41,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:67,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:96,h:2,dest:'2-2',spawn:[3*T,GY-50]},
   ],
-  piranhas:[[14,3],[67,3],[124,3]],
   enemies:[
     [5,'goomba'],[10,'koopa'],[16,'goomba'],[22,'goomba'],
-    [26,'koopa'],[32,'goomba'],[36,'goomba'],[40,'koopa'],
-    [48,'goomba'],[54,'koopa'],[60,'goomba'],[65,'goomba'],
-    [68,'koopa_fly'],[75,'goomba'],[80,'koopa'],[86,'goomba'],
-    [90,'goomba'],[94,'koopa'],[99,'goomba'],[103,'goomba'],
-    [108,'koopa_fly'],[113,'goomba'],[119,'koopa'],[124,'goomba'],
-    [132,'goomba'],[136,'koopa'],[140,'goomba'],
+    [28,'koopa'],[33,'goomba'],[37,'goomba'],[42,'koopa'],
+    [49,'goomba'],[55,'koopa'],[61,'goomba'],[66,'goomba'],
+    [76,'goomba'],[82,'koopa'],[88,'goomba'],
+    [92,'goomba'],[97,'koopa'],[102,'goomba'],
+    [109,'koopa_fly'],[114,'goomba'],[120,'koopa'],[126,'goomba'],
+    [135,'goomba'],[140,'koopa'],[145,'goomba'],
   ],
   checkpoints:[[73]],flag:[144]},
 
 '2-2':{LW:62,name:'2-2',bg:'underground',ceiling:true,gtype:'stone',
   bricks:[
-    [4,10],[5,10],[6,10],[7,10],[8,10],
-    [10,8],[11,8],[12,8],[13,8],[14,8],
-    [16,10],[17,10],[18,10],[19,10],[20,10],
-    [22,8],[23,8],[24,8],[25,8],[26,8],
-    [28,10],[29,10],[30,10],[31,10],[32,10],
-    [34,8],[35,8],[36,8],[37,8],[38,8],
-    [40,10],[41,10],[42,10],[43,10],[44,10],
-    [46,8],[47,8],[48,8],[49,8],[50,8],
-    [52,10],[53,10],[54,10],[55,10],[56,10],
-    [58,8],[59,8],[60,8],
+    [3,9],[4,9],[5,9],[6,9],[7,9],
+    [10,9],[11,9],[12,9],[13,9],[14,9],
+    [17,9],[18,9],[19,9],[20,9],[21,9],
+    [24,9],[25,9],[26,9],[27,9],[28,9],
+    [31,9],[32,9],[33,9],[34,9],[35,9],
+    [38,9],[39,9],[40,9],[41,9],[42,9],
+    [45,9],[46,9],[47,9],[48,9],[49,9],
+    [52,9],[53,9],[54,9],[55,9],[56,9],
+    [59,9],[60,9],[61,9],
   ],
   qdata:[
-    [5,9,5,true],[12,7,7,true],[19,9,5,false],
-    [25,7,5,true],[31,9,7,true],[37,7,5,false],
-    [43,9,5,true],[49,7,7,true],[55,9,5,true],
+    [6,6,5,true],[13,6,7,true],[20,6,5,false],
+    [27,6,5,true],[34,6,7,true],[41,6,5,false],
+    [48,6,5,true],[55,6,7,true],[61,6,5,false],
   ],
   pipes:[{tx:2,h:2,exit:true,dest:'2-1',spawn:[97*T,GY-50]}],
   enemies:[
-    [6,'goomba'],[11,'koopa'],[18,'goomba'],[23,'goomba'],
-    [29,'koopa'],[35,'goomba'],[41,'koopa'],[47,'goomba'],
-    [49,'goomba'],[53,'koopa'],[57,'goomba'],[59,'goomba'],
+    [6,'goomba'],[12,'koopa'],[19,'goomba'],[25,'goomba'],
+    [32,'koopa'],[38,'goomba'],[44,'koopa'],[50,'goomba'],
+    [56,'koopa'],[60,'goomba'],
   ],
   checkpoints:[[31]]},
 
 '3-1':{LW:110,name:'3-1',bg:'castle',gtype:'stone',
   pits:[[15,18],[33,36],[53,56],[73,76]],
   extraStone:[
-    // Platforms over lava pits
-    [12,10],[13,10],[14,10],[16,10],[17,10],[18,10],[19,10],[20,10],
-    [12,8],[13,8],[14,8],[12,6],[13,6],
-    [30,10],[31,10],[32,10],[34,10],[35,10],[36,10],[37,10],[38,10],
-    [30,8],[31,8],[32,8],[30,6],[31,6],
-    [50,10],[51,10],[52,10],[54,10],[55,10],[56,10],[57,10],[58,10],
-    [50,8],[51,8],[52,8],[50,6],[51,6],
-    [70,10],[71,10],[72,10],[74,10],[75,10],[76,10],[77,10],[78,10],
-    [70,8],[71,8],[72,8],[70,6],[71,6],
-    // Bridge to Bowser
-    [90,13],[91,13],[92,13],[93,13],[94,13],[95,13],[96,13],
-    [97,13],[98,13],[99,13],[100,13],[101,13],[102,13],[103,13],
-    [104,13],[105,13],[106,13],[107,13],[108,13],
-    // Extra platforms
-    [5,11],[6,11],[7,11],[8,11],[9,11],
-    [22,11],[23,11],[24,11],[25,11],[26,11],
-    [42,11],[43,11],[44,11],[45,11],[46,11],
-    [62,11],[63,11],[64,11],[65,11],[66,11],
-    [82,11],[83,11],[84,11],[85,11],[86,11],
+    [3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],
+    [15,10],[16,10],[17,10],
+    [18,10],[19,10],[20,10],[21,10],[22,10],[23,10],[24,10],[25,10],[26,10],[27,10],[28,10],[29,10],[30,10],[31,10],[32,10],
+    [33,10],[34,10],[35,10],
+    [36,10],[37,10],[38,10],[39,10],[40,10],[41,10],[42,10],[43,10],[44,10],[45,10],[46,10],[47,10],[48,10],[49,10],[50,10],[51,10],[52,10],
+    [53,10],[54,10],[55,10],
+    [56,10],[57,10],[58,10],[59,10],[60,10],[61,10],[62,10],[63,10],[64,10],[65,10],[66,10],[67,10],[68,10],[69,10],[70,10],[71,10],[72,10],
+    [73,10],[74,10],[75,10],
+    [76,10],[77,10],[78,10],[79,10],[80,10],[81,10],[82,10],[83,10],[84,10],[85,10],[86,10],[87,10],[88,10],[89,10],
   ],
   qdata:[
-    [6,10,3,true],[23,10,3,true],[43,10,5,true],
-    [63,10,3,true],[83,10,5,true],[96,10,3,true],
+    [6,7,3,true],[22,7,3,true],[40,7,5,true],
+    [60,7,3,true],[80,7,5,true],[95,7,3,true],
   ],
   enemies:[
-    [7,'goomba'],[12,'koopa'],[18,'koopa'],[24,'goomba'],
-    [32,'koopa'],[38,'goomba'],[43,'koopa'],[54,'goomba'],
-    [58,'koopa'],[64,'goomba'],[72,'koopa'],[78,'goomba'],
-    [83,'koopa'],[86,'goomba'],[90,'koopa_fly'],[95,'goomba'],
+    [7,'goomba'],[12,'koopa'],[19,'koopa'],[25,'goomba'],
+    [32,'koopa'],[38,'goomba'],[44,'koopa'],[55,'goomba'],
+    [60,'koopa'],[66,'goomba'],[74,'koopa'],[80,'goomba'],
+    [85,'koopa'],[88,'goomba'],[92,'koopa_fly'],[97,'goomba'],
   ],
   bowser:[99],checkpoints:[[55]],axe:[106]},
 };
@@ -395,7 +341,10 @@ function init(){
   lv=buildLevel(DEFS['1-1']);timer=400;timerTick=0;camX=0;
   state='title';hud();
 }
-function startGame(){loadLevel('1-1');}
+function startGame(){
+  if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;}
+  loadLevel('1-1');
+}
 
 function loadLevel(name,sx,sy){
   lv=buildLevel(DEFS[name]);
@@ -790,14 +739,18 @@ function updTimer(){
   if(timer<=0){killPlayer(p1);killPlayer(p2);}
 }
 
-// ── CAMERA: smooth center on alive players ─────────────────────────────────
+// ── CAMERA ─────────────────────────────────────────────────────────────────
 function updCam(){
-  const ps=[p1,p2].filter(p=>!p.dead);
-  if(!ps.length)return;
-  const avgX=ps.reduce((s,p)=>s+p.x+p.w/2,0)/ps.length;
-  const tgt=avgX-W/2;
-  camX+=(tgt-camX)*.14;
-  camX=Math.max(0,Math.min(camX,lv.LW*T-W));
+  const LW=lv.LW*T;
+  if(gameMode==='1p'){
+    if(!p1.dead){const t=p1.x+p1.w/2-W/2;camX+=(t-camX)*.14;camX=Math.max(0,Math.min(camX,LW-W));}
+    cam1X=camX;
+  }else{
+    const hw=W/2;
+    if(!p1.dead){const t=Math.max(0,Math.min(p1.x+p1.w/2-hw/2,LW-hw));cam1X+=(t-cam1X)*.14;}
+    if(!p2.dead){const t=Math.max(0,Math.min(p2.x+p2.w/2-hw/2,LW-hw));cam2X+=(t-cam2X)*.14;}
+    camX=cam1X;
+  }
 }
 
 // ── DRAW ──────────────────────────────────────────────────────────────────
@@ -1454,7 +1407,7 @@ function drawTitle(){
   ctx.globalAlpha=.65+Math.sin(tick*.09)*.35;
   ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=18;
   ctx.font='bold 19px Arial';ctx.textAlign='center';
-  ctx.fillText('PRESS ANY KEY or CLICK TO START',W/2,0);
+  ctx.fillText('Press 1 — SOLO  |  Press 2 — MULTIPLAYER  |  Click — MULTIPLAYER',W/2,0);
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.restore();
 }
@@ -1464,48 +1417,70 @@ function loop(){
   ctx.clearRect(0,0,W,H);
   if(state==='title'){drawTitle();requestAnimationFrame(loop);return;}
   if(state==='play'||state==='transition'){
-    updPlayer(p1,true);updPlayer(p2,false);
+    updPlayer(p1,true);if(gameMode==='2p')updPlayer(p2,false);
     updEnemies();updFireballs();updPowerups();updParticles();updTimer();updCam();
   }
   tick++;
   // Clear KP after each frame
   for(const k in KP)delete KP[k];
 
-  drawBG();drawSolids();drawCoinsAll();drawCheckpoints();drawFlag();drawAxe();
-  for(const e of lv.enemies){
-    if(e.type==='goomba')drawGoomba(e);
-    else if(e.type==='koopa'||e.type==='koopa_fly')drawKoopa(e);
-    else if(e.type==='piranha')drawPiranha(e);
-    else if(e.type==='bowser')drawBowser(e);
+  function drawScene(){
+    drawBG();drawSolids();drawCoinsAll();drawCheckpoints();drawFlag();drawAxe();
+    for(const e of lv.enemies){
+      if(e.type==='goomba')drawGoomba(e);
+      else if(e.type==='koopa'||e.type==='koopa_fly')drawKoopa(e);
+      else if(e.type==='piranha')drawPiranha(e);
+      else if(e.type==='bowser')drawBowser(e);
+    }
+    drawPowerups();drawFireballs();drawPlayer(p1);
+    if(gameMode==='2p')drawPlayer(p2);
+    drawFX();
   }
-  drawPowerups();drawFireballs();drawPlayer(p1);drawPlayer(p2);drawFX();
+  function drawReloadBar(p,bx,col){
+    if(p.dead||p.power!==2)return;
+    const fw=(p.ammoTimer/180)*50;
+    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(bx,24,52,7);
+    ctx.fillStyle=col;ctx.fillRect(bx,24,fw,7);
+    ctx.fillStyle='#fff';ctx.font='7px Arial';ctx.textAlign='left';ctx.fillText('RELOAD',bx+2,30);
+  }
+  function drawPosTag(p,label,col,yOff){
+    if(p.dead)return;
+    const px=Math.max(16,Math.min(p.x-camX,W/2-16));
+    ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(px-14,yOff,28,12,[4]);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText(label,px,yOff+9);
+  }
 
-  // Ammo reload bars on canvas
-  if(!p1.dead&&p1.power===2){
-    const fillW=(p1.ammoTimer/180)*50;
-    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(4,24,52,7);
-    ctx.fillStyle='#ff8800';ctx.fillRect(4,24,fillW,7);
-    ctx.fillStyle='#fff';ctx.font='7px Arial';ctx.textAlign='left';ctx.fillText('RELOAD',6,30);
-  }
-  if(!p2.dead&&p2.power===2){
-    const fillW=(p2.ammoTimer/180)*50;
-    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(W-56,24,52,7);
-    ctx.fillStyle='#44dd44';ctx.fillRect(W-56,24,fillW,7);
-    ctx.fillStyle='#fff';ctx.font='7px Arial';ctx.textAlign='left';ctx.fillText('RELOAD',W-54,30);
+  if(gameMode==='1p'){
+    drawScene();
+    drawReloadBar(p1,4,'#f80');
+    if(!p1.dead){const px=Math.max(14,Math.min(p1.x-camX,W-28));ctx.fillStyle='rgba(200,40,40,.85)';ctx.beginPath();ctx.roundRect(px-12,2,26,11,[4]);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText('P1',px,9);}
+  }else{
+    // Left half — P1
+    ctx.save();
+    ctx.beginPath();ctx.rect(0,0,W/2,H);ctx.clip();
+    camX=cam1X;
+    drawScene();
+    drawReloadBar(p1,4,'#f80');
+    drawPosTag(p1,'P1','rgba(200,40,40,.85)',2);
+    ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,28,14);
+    ctx.fillStyle='#ff8a80';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText('P1',14,10);
+    ctx.restore();
+    // Right half — P2
+    ctx.save();
+    ctx.beginPath();ctx.rect(W/2,0,W/2,H);ctx.clip();
+    ctx.translate(W/2,0);
+    camX=cam2X;
+    drawScene();
+    drawReloadBar(p2,4,'#4d4');
+    drawPosTag(p2,'P2','rgba(40,180,40,.85)',2);
+    ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,28,14);
+    ctx.fillStyle='#69db7c';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText('P2',14,10);
+    ctx.restore();
+    // Divider
+    ctx.fillStyle='#000';ctx.fillRect(W/2-1,0,2,H);
   }
 
-  // Player position indicators
-  if(!p1.dead){
-    const px=Math.max(14,Math.min(p1.x-camX,W-28));
-    ctx.fillStyle='rgba(200,40,40,.85)';ctx.beginPath();ctx.roundRect(px-12,2,26,11,[4]);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText('P1',px,9);
-  }
-  if(!p2.dead){
-    const px=Math.max(14,Math.min(p2.x-camX,W-28));
-    ctx.fillStyle='rgba(40,180,40,.85)';ctx.beginPath();ctx.roundRect(px-12,14,26,11,[4]);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText('P2',px,21);
-  }
-  // Revive prompts
+  // Revive prompts (full canvas)
   const pulse=.7+Math.sin(tick*.12)*.3;
   if(p2.outOfLives&&!p1.outOfLives){
     const canR=p1.coins>=15;
@@ -1523,6 +1498,7 @@ function loop(){
     ctx.fillText(canR?'Press I — Revive P1 (15 coins)':'P1 is OUT! P2 needs 15 coins to revive',W/2,H-18);
     ctx.shadowBlur=0;ctx.globalAlpha=1;
   }
+
   requestAnimationFrame(loop);
 }
 
