@@ -44,11 +44,13 @@ const W=800,H=432,T=32,GR=0.52,GY=H-T;
 // ── INPUT: track pressed-this-frame separately ──────────────────────────
 const K={},KP={};
 document.addEventListener('keydown',e=>{
+  if(state==='title'){startGame();return;}
   if(!K[e.code])KP[e.code]=true;
   K[e.code]=true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   if(e.code==='KeyR')init();
 });
+document.getElementById('c').addEventListener('click',()=>{if(state==='title')startGame();});
 document.addEventListener('keyup',e=>{delete K[e.code];});
 
 let state,camX,particles,popups,coinAnims,fireballs,powerups,lv,timer,timerTick,cpX,worldIdx;
@@ -107,7 +109,7 @@ function overlap(a,b,px=3,py=2){
 }
 
 // ── LEVEL DATA ───────────────────────────────────────────────────────────
-const WORLDS=['1-1','1-2','2-1','2-2','3-1'];
+const WORLDS=['1-1','2-1','3-1'];
 
 // Q blocks are all at y=10-11 (easy to reach), lots more platforms
 const DEFS={
@@ -388,10 +390,12 @@ function buildLevel(def){
 // ── GAME INIT ─────────────────────────────────────────────────────────────
 function init(){
   worldIdx=0;cpX=0;
-  particles=[];popups=[];coinAnims=[];fireballs=[];powerups=[];state='play';
+  particles=[];popups=[];coinAnims=[];fireballs=[];powerups=[];
   p1=mkPlayer(2*T,GY-50,1);p2=mkPlayer(3*T,GY-50,2);
-  loadLevel('1-1');
+  lv=buildLevel(DEFS['1-1']);timer=400;timerTick=0;camX=0;
+  state='title';hud();
 }
+function startGame(){loadLevel('1-1');}
 
 function loadLevel(name,sx,sy){
   lv=buildLevel(DEFS[name]);
@@ -654,6 +658,8 @@ function updEnemies(){
       for(const s of lv.solids){
         if(!['ground','brick','pipe','qblock','stone'].includes(s.type))continue;
         if(e.y+e.h<=s.y||e.y>=s.y+s.h||e.x+e.w<=s.x||e.x>=s.x+s.w)continue;
+        // Skip platforms that only clip the enemy's upper body — enemy walks under them
+        if(Math.min(e.y+e.h,s.y+s.h) < e.y+e.h*.6) continue;
         const oL=e.x+e.w-s.x,oR=s.x+s.w-e.x;
         if(oL<oR){e.x=s.x-e.w;e.vx=-Math.abs(e.vx);}
         else{e.x=s.x+s.w;e.vx=Math.abs(e.vx);}
@@ -775,7 +781,7 @@ function updPowerups(){
 
 let coinBob=0,tick=0;
 function updParticles(){
-  coinBob+=.07;tick++;
+  coinBob+=.07;
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.25;p.vx*=.97;p.life--;if(p.life<=0)particles.splice(i,1);}
   for(let i=popups.length-1;i>=0;i--){const p=popups[i];p.y+=p.vy;p.life--;if(p.life<=0)popups.splice(i,1);}
   for(let i=coinAnims.length-1;i>=0;i--){const a=coinAnims[i];a.y+=a.vy;a.vy+=.5;a.life--;if(a.life<=0)coinAnims.splice(i,1);}
@@ -1382,13 +1388,88 @@ function drawFX(){
   ctx.globalAlpha=1;
 }
 
+// ── TITLE / INSTRUCTIONS SCREEN ───────────────────────────────────────────
+function drawTitle(){
+  tick++;
+  // Sky gradient background
+  const sk=ctx.createLinearGradient(0,0,0,H);
+  sk.addColorStop(0,'#0a1a40');sk.addColorStop(.6,'#0d2a6e');sk.addColorStop(1,'#1a3a8f');
+  ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
+  // Stars
+  ctx.fillStyle='rgba(255,255,255,.7)';
+  for(let i=0;i<50;i++){const x=(i*137+71)%W,y=(i*97+43)%(H*.55);ctx.beginPath();ctx.arc(x,y,.8+i%3*.5,0,Math.PI*2);ctx.fill();}
+
+  // Title
+  ctx.shadowColor='#ffd700';ctx.shadowBlur=36;
+  ctx.fillStyle='#ffd700';ctx.textAlign='center';ctx.font='bold 54px Arial';
+  ctx.fillText('SUPER MARIO',W/2,68);
+  ctx.shadowColor='#fff';ctx.shadowBlur=10;
+  ctx.fillStyle='#fff';ctx.font='bold 26px Arial';
+  ctx.fillText('MULTIPLAYER BROS',W/2,104);
+  ctx.shadowBlur=0;
+
+  // Gold divider
+  const dv=()=>{ctx.strokeStyle='rgba(255,215,0,.35)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(50,0);ctx.lineTo(W-50,0);ctx.stroke();};
+
+  // Controls
+  ctx.save();ctx.translate(0,122);dv();
+  ctx.fillStyle='#ffd700';ctx.font='bold 13px monospace';ctx.fillText('CONTROLS',W/2,16);
+  ctx.font='11px monospace';
+  ctx.fillStyle='#ff8a80';ctx.fillText('P1 MARIO:  Arrow Keys to move   Up / Z to jump   X to fire   Down to enter pipe',W/2,34);
+  ctx.fillStyle='#69db7c';ctx.fillText('P2 LUIGI:  A / D to move   W to jump   Q to fire   S to enter pipe',W/2,50);
+  ctx.fillStyle='#aaa';ctx.fillText('Both players can DOUBLE JUMP — press jump again while in the air!',W/2,66);
+  ctx.restore();
+
+  // How to play
+  ctx.save();ctx.translate(0,200);dv();
+  ctx.fillStyle='#ffd700';ctx.font='bold 13px monospace';ctx.fillText('HOW TO PLAY',W/2,16);
+  ctx.font='11px monospace';
+  const tips=[
+    ['#fff','Jump ON top of Goombas / Koopas to stomp them!  Kick shells into other enemies!'],
+    ['#fff','Hit the yellow ? blocks from BELOW to get powerups'],
+    ['#fa0','Mushroom — Makes you BIG! Big Mario can smash brick blocks'],
+    ['#ff6b35','Fire Flower — Gives you 5 fireballs that auto-reload every 3 sec (press X / Q)'],
+    ['#4cf','Reach the FLAG pole at the end of each world to advance to the next'],
+    ['#ff0','Enter green pipes by pressing Down on top of them to find hidden rooms!'],
+  ];
+  let ty=34;
+  for(const[col,text]of tips){ctx.fillStyle=col;ctx.fillText(text,W/2,ty);ty+=16;}
+  ctx.restore();
+
+  // Boss
+  ctx.save();ctx.translate(0,314);dv();
+  ctx.shadowColor='#f44';ctx.shadowBlur=14;
+  ctx.fillStyle='#ff5252';ctx.font='bold 13px monospace';ctx.fillText('BOSS: BOWSER  (World 3-1 — The Castle)',W/2,16);
+  ctx.shadowBlur=0;ctx.font='11px monospace';
+  const btips=[
+    ['#ffaa44','Path: Complete World 1-1 (flag)  then World 2-1 (flag)  then face BOWSER in 3-1'],
+    ['#ff8888','Touch the GOLDEN AXE past Bowser to defeat him instantly!'],
+    ['#ff8888','OR shoot him 10 times with fireballs — but he fires back!'],
+    ['#aff','Dodge his fireballs — jump over them or get a Fire Flower and shoot back!'],
+  ];
+  ty=34;
+  for(const[col,text]of btips){ctx.fillStyle=col;ctx.fillText(text,W/2,ty);ty+=16;}
+  ctx.restore();
+
+  // Pulse prompt
+  ctx.save();ctx.translate(0,420);
+  ctx.globalAlpha=.65+Math.sin(tick*.09)*.35;
+  ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=18;
+  ctx.font='bold 19px Arial';ctx.textAlign='center';
+  ctx.fillText('PRESS ANY KEY or CLICK TO START',W/2,0);
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+  ctx.restore();
+}
+
 // ── MAIN LOOP ──────────────────────────────────────────────────────────────
 function loop(){
   ctx.clearRect(0,0,W,H);
+  if(state==='title'){drawTitle();requestAnimationFrame(loop);return;}
   if(state==='play'||state==='transition'){
     updPlayer(p1,true);updPlayer(p2,false);
     updEnemies();updFireballs();updPowerups();updParticles();updTimer();updCam();
   }
+  tick++;
   // Clear KP after each frame
   for(const k in KP)delete KP[k];
 
