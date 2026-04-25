@@ -83,7 +83,14 @@ document.addEventListener('keydown',e=>{
     if(e.code==='Digit1'){difficulty='easy';state='modeselect';return;}
     if(e.code==='Digit2'){difficulty='medium';state='modeselect';return;}
     if(e.code==='Digit3'){difficulty='hard';state='modeselect';return;}
-    if(e.code==='Digit4'){difficulty='nightmare';jsTimer=3200;state='modeselect';return;}
+    if(e.code==='Digit4'){state='nightmareselect';return;}
+    return;
+  }
+  if(state==='nightmareselect'){
+    if(e.code==='Escape'){state='title';return;}
+    if(e.code==='Digit1'){difficulty='nm_normal';jsTimer=3200;jsActive=0;state='modeselect';return;}
+    if(e.code==='Digit2'){difficulty='nm_hard';jsTimer=2800;jsActive=0;state='modeselect';return;}
+    if(e.code==='Digit3'){difficulty='nm_extreme';jsTimer=2200;jsActive=0;state='modeselect';return;}
     return;
   }
   if(state==='modeselect'){
@@ -157,13 +164,16 @@ let shakeX=0,shakeY=0;
 function shake(amt=6){shakeX=(Math.random()-.5)*amt*2;shakeY=(Math.random()-.5)*amt*2;}
 let stats={kills:0,deaths:0,startTime:0,fireballs:0};
 let p1LastL=0,p1LastR=0,p2LastL=0,p2LastR=0,p1DashDir=0,p2DashDir=0;
-let difficulty='medium'; // 'easy' | 'medium' | 'hard' | 'nightmare'
+let difficulty='medium'; // 'easy'|'medium'|'hard'|'nm_normal'|'nm_hard'|'nm_extreme'
 const DIFF={
-  easy:      {lives:3,speedMult:1.0, timer:400,spawnPct:1.0},
-  medium:    {lives:2,speedMult:1.3, timer:350,spawnPct:1.0},
-  hard:      {lives:1,speedMult:1.6, timer:250,spawnPct:1.0},
-  nightmare: {lives:1,speedMult:2.5, timer:180,spawnPct:1.0},
+  easy:       {lives:3,speedMult:1.0, timer:400,spawnPct:1.0},
+  medium:     {lives:2,speedMult:1.3, timer:350,spawnPct:1.0},
+  hard:       {lives:1,speedMult:1.6, timer:250,spawnPct:1.0},
+  nm_normal:  {lives:2,speedMult:1.8, timer:300,spawnPct:1.0},
+  nm_hard:    {lives:1,speedMult:2.5, timer:180,spawnPct:1.0},
+  nm_extreme: {lives:1,speedMult:3.2, timer:120,spawnPct:1.0},
 };
+function isNightmare(){return difficulty.startsWith('nm_');}
 
 // ── JUMPSCARE ────────────────────────────────────────────────────────────────
 let jsTimer=3200,jsActive=0,jsPhase=0;
@@ -1382,7 +1392,7 @@ function drawNightmareBG(){
 
 function drawBG(){
   const bg=lv.bg;
-  if(difficulty==='nightmare'){drawNightmareBG();return;}
+  if(isNightmare()){drawNightmareBG();return;}
   if(bg==='secret'){
     const sk=ctx.createLinearGradient(0,0,0,H);
     sk.addColorStop(0,'#0a0020');sk.addColorStop(.5,'#160040');sk.addColorStop(1,'#0a0030');
@@ -1670,7 +1680,7 @@ function drawCloud(cx,cy,s){
 
 function drawTile(sx,sy,type){
   if(type==='ground'){
-    const isD=lv.bg==='desert',isCastle=lv.bg==='castle',isNM=difficulty==='nightmare',isT=lv.bg==='tropic';
+    const isD=lv.bg==='desert',isCastle=lv.bg==='castle',isNM=isNightmare(),isT=lv.bg==='tropic';
     ctx.fillStyle=isNM?'#1a0000':isD?'#b87830':isCastle?'#3a3030':isT?'#c8a050':'#8b4513';ctx.fillRect(sx,sy,T,T);
     // Top surface
     ctx.fillStyle=isNM?'#550000':isD?'#d4a04a':isCastle?'#4a4040':isT?'#e8c870':'#228b22';ctx.fillRect(sx,sy,T,10);
@@ -2289,10 +2299,11 @@ function drawModeSelect(){
 
   ctx.textAlign='center';
   // Difficulty badge
-  const dcol=difficulty==='nightmare'?'#ff0000':difficulty==='easy'?'#4ef542':difficulty==='hard'?'#ff4444':'#ffd700';
+  const dcol=isNightmare()?'#ff0000':difficulty==='hard'?'#ff4444':difficulty==='easy'?'#4ef542':'#ffd700';
   ctx.shadowColor=dcol;ctx.shadowBlur=20;
   ctx.fillStyle=dcol;ctx.font='bold 32px Arial';
-  ctx.fillText(difficulty.toUpperCase()+' MODE',W/2,80);
+  const diffLabel=isNightmare()?'☠ NIGHTMARE '+({nm_normal:'NORMAL',nm_hard:'HARD',nm_extreme:'EXTREME'}[difficulty])+' ☠':difficulty.toUpperCase();
+  ctx.fillText(diffLabel+' MODE',W/2,80);
   ctx.shadowBlur=0;
 
   ctx.fillStyle='#fff';ctx.font='bold 22px Arial';
@@ -2373,6 +2384,52 @@ function drawShop(){
   }
   updParticles();
   drawFX();
+}
+
+function drawNightmareSelect(){
+  tick++;
+  // Hellish bg
+  const sk=ctx.createLinearGradient(0,0,0,H);
+  sk.addColorStop(0,'#000');sk.addColorStop(.5,'#150000');sk.addColorStop(1,'#200000');
+  ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
+  // Floating red eyes
+  for(let i=0;i<10;i++){
+    const ex=((i*213+tick*.5)%W+W)%W,ey=40+i*36+Math.sin(tick*.03+i)*12;
+    ctx.globalAlpha=.15+Math.abs(Math.sin(tick*.05+i))*.2;
+    ctx.fillStyle='#ff2200';ctx.beginPath();ctx.ellipse(ex,ey,10,7,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(ex,ey,3,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  // Title
+  const pulse=Math.abs(Math.sin(tick*.06));
+  ctx.fillStyle=`rgb(${Math.floor(180+75*pulse)},0,0)`;ctx.shadowColor='#ff0000';ctx.shadowBlur=24;
+  ctx.font='bold 46px Arial';ctx.textAlign='center';
+  ctx.fillText('☠  NIGHTMARE MODE  ☠',W/2,70);ctx.shadowBlur=0;
+  ctx.fillStyle='#ff8888';ctx.font='15px monospace';
+  ctx.fillText('Choose your nightmare. There is no easy way out.',W/2,100);
+  // 3 buttons
+  const nmDiffs=[
+    ['1','NORMAL','#cc4444','2 lives  ·  1.8x speed  ·  300 sec','Jumpscares every ~1 min'],
+    ['2','HARD',  '#ff2200','1 life   ·  2.5x speed  ·  180 sec','Jumpscares every ~45 sec'],
+    ['3','EXTREME','#ff0000','1 life   ·  3.2x speed  ·  120 sec','Jumpscares every ~35 sec'],
+  ];
+  let bx=W/2-280;
+  for(const[key,label,col,desc,jdesc]of nmDiffs){
+    const bw=175;
+    ctx.fillStyle='rgba(80,0,0,.5)';ctx.strokeStyle=col;ctx.lineWidth=2;ctx.shadowColor=col;ctx.shadowBlur=8+pulse*10;
+    ctx.beginPath();ctx.roundRect(bx,130,bw,120,10);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle=col;ctx.font='bold 30px Arial';ctx.textAlign='center';
+    ctx.fillText(label,bx+bw/2,168);
+    ctx.fillStyle='#ffaaaa';ctx.font='11px monospace';
+    ctx.fillText(desc,bx+bw/2,192);
+    ctx.fillStyle='#ff6666';ctx.font='10px monospace';
+    ctx.fillText(jdesc,bx+bw/2,210);
+    ctx.fillStyle='#884444';ctx.font='12px monospace';
+    ctx.fillText('Press '+key,bx+bw/2,236);
+    bx+=bw+17;
+  }
+  ctx.fillStyle='#555';ctx.font='12px monospace';ctx.textAlign='center';
+  ctx.fillText('Esc — go back',W/2,300);
 }
 
 function drawCharSelect(){
@@ -2539,6 +2596,7 @@ function loop(){
   ctx.save();ctx.translate(Math.round(shakeX),Math.round(shakeY));
   if(state==='title'){drawTitle();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='modeselect'){drawModeSelect();ctx.restore();requestAnimationFrame(loop);return;}
+  if(state==='nightmareselect'){drawNightmareSelect();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='charselect'){drawCharSelect();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='online'){drawOnlineMenu();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='hosting'){drawHosting();ctx.restore();requestAnimationFrame(loop);return;}
@@ -2568,7 +2626,7 @@ function loop(){
   }
   tick++;
   // Jumpscare countdown (nightmare mode only, during play)
-  if(difficulty==='nightmare'&&(state==='play'||state==='miniboss')){
+  if(isNightmare()&&(state==='play'||state==='miniboss')){
     if(jsActive>0){jsActive--;}
     else{jsTimer--;if(jsTimer<=0)triggerJumpscare();}
   }
@@ -2585,7 +2643,7 @@ function loop(){
       else if(e.type==='bowser')drawBowser(e);
     }
     // Nightmare: glowing red eyes on all alive enemies
-    if(difficulty==='nightmare'){
+    if(isNightmare()){
       for(const e of lv.enemies){
         if(!e.alive||e.squished)continue;
         const ex=e.x-camX,ey=e.y;
