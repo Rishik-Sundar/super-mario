@@ -88,9 +88,9 @@ document.addEventListener('keydown',e=>{
   }
   if(state==='nightmareselect'){
     if(e.code==='Escape'){state='title';return;}
-    if(e.code==='Digit1'){difficulty='nm_normal';jsTimer=3200;jsActive=0;state='modeselect';return;}
-    if(e.code==='Digit2'){difficulty='nm_hard';jsTimer=2800;jsActive=0;state='modeselect';return;}
-    if(e.code==='Digit3'){difficulty='nm_extreme';jsTimer=2200;jsActive=0;state='modeselect';return;}
+    if(e.code==='Digit1'){difficulty='nm_normal';jsTimer=900;jsActive=0;state='modeselect';return;}
+    if(e.code==='Digit2'){difficulty='nm_hard';jsTimer=600;jsActive=0;state='modeselect';return;}
+    if(e.code==='Digit3'){difficulty='nm_extreme';jsTimer=300;jsActive=0;state='modeselect';return;}
     return;
   }
   if(state==='modeselect'){
@@ -196,37 +196,51 @@ function playScreech(){
   }catch(err){}
 }
 function triggerJumpscare(){
-  jsActive=55;jsPhase=Math.floor(Math.random()*5);
+  jsActive=80;jsPhase=Math.floor(Math.random()*5);
   playScreech();
-  jsTimer=1800+Math.floor(Math.random()*2400);
+  const base=difficulty==='nm_extreme'?600:difficulty==='nm_hard'?900:1400;
+  jsTimer=base+Math.floor(Math.random()*base);
 }
 function drawJumpscare(){
-  const fade=jsActive>45?.95:(jsActive/45)*.95;
-  ctx.fillStyle=`rgba(0,0,0,${fade})`;ctx.fillRect(0,0,W,H);
-  if(jsActive<45){
-    const a=jsActive/45;
-    // Eyes
-    for(const[ex,ey] of[[W/2-100,H/2-50],[W/2+100,H/2-50]]){
-      const eg=ctx.createRadialGradient(ex,ey,0,ex,ey,60);
-      eg.addColorStop(0,'#ffffff');eg.addColorStop(.25,'#ff3300');eg.addColorStop(1,'rgba(80,0,0,0)');
-      ctx.globalAlpha=a;ctx.fillStyle=eg;ctx.beginPath();ctx.ellipse(ex,ey,65,48,0,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(ex,ey+6,20,26,0,0,Math.PI*2);ctx.fill();
-      ctx.globalAlpha=1;
-    }
-    // Jagged grin
-    ctx.strokeStyle=`rgba(255,0,0,${a})`;ctx.lineWidth=5;ctx.beginPath();
-    let gx=W/2-100,gy=H/2+40;ctx.moveTo(gx,gy);
-    for(let i=0;i<=10;i++){gx+=20;gy=H/2+40+(i%2===0?18:-5);ctx.lineTo(gx,gy);}
-    ctx.stroke();
-    // Scary message
-    const msgs=['YOU CANNOT ESCAPE','THEY SEE YOU','NO WAY OUT','IM WATCHING','RUN. NOW.'];
-    ctx.fillStyle=`rgba(255,0,0,${a})`;ctx.shadowColor='#ff0000';ctx.shadowBlur=30;
-    ctx.font='bold 44px Arial';ctx.textAlign='center';
-    ctx.fillText(msgs[jsPhase],W/2,H-55);ctx.shadowBlur=0;
-    // Static noise
-    ctx.fillStyle=`rgba(255,0,0,${a*.07})`;
-    for(let i=0;i<300;i++)ctx.fillRect(Math.random()*W,Math.random()*H,Math.random()*3+1,Math.random()*3+1);
+  // Phase 1: flash in (frames 80→60), Phase 2: hold face (59→20), Phase 3: fade out (19→0)
+  let a;
+  if(jsActive>60)a=(80-jsActive)/20;       // 0→1 flash in
+  else if(jsActive>20)a=1;                  // hold full
+  else a=jsActive/20;                       // 1→0 fade out
+  // Black screen
+  ctx.fillStyle=`rgba(0,0,0,${Math.min(a*1.2,.97)})`;ctx.fillRect(0,0,W,H);
+  if(a<0.05)return;
+  ctx.globalAlpha=a;
+  // Giant face — centered
+  const cx=W/2,cy=H/2-20;
+  // Glowing red eyes
+  for(const ex of[cx-110,cx+110]){
+    const eg=ctx.createRadialGradient(ex,cy-30,0,ex,cy-30,80);
+    eg.addColorStop(0,'#ffffff');eg.addColorStop(.2,'#ff4400');eg.addColorStop(.6,'#990000');eg.addColorStop(1,'rgba(50,0,0,0)');
+    ctx.fillStyle=eg;ctx.beginPath();ctx.ellipse(ex,cy-30,85,62,0,0,Math.PI*2);ctx.fill();
+    // Pupil
+    ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(ex,cy-22,22,30,0,0,Math.PI*2);ctx.fill();
+    // White glint
+    ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.ellipse(ex-8,cy-36,6,8,-.4,0,Math.PI*2);ctx.fill();
   }
+  // Jagged mouth
+  ctx.strokeStyle='#ff0000';ctx.lineWidth=6;ctx.shadowColor='#ff0000';ctx.shadowBlur=12;
+  ctx.beginPath();
+  let gx=cx-120,gy=cy+60;ctx.moveTo(gx,gy);
+  for(let i=0;i<=12;i++){gx+=20;gy=cy+60+(i%2===0?22:-8);ctx.lineTo(gx,gy);}
+  ctx.stroke();ctx.shadowBlur=0;
+  // Blood drips
+  ctx.fillStyle='#cc0000';
+  for(let i=0;i<8;i++){const dx=cx-110+i*32,dh=20+i%3*15;ctx.fillRect(dx-3,cy+70,6,dh);ctx.beginPath();ctx.arc(dx,cy+70+dh,4,0,Math.PI*2);ctx.fill();}
+  // Scary text
+  const msgs=['YOU CANNOT ESCAPE','THEY SEE YOU','NO WAY OUT','IM WATCHING','RUN. NOW.'];
+  ctx.fillStyle='#ff0000';ctx.shadowColor='#ff0000';ctx.shadowBlur=25;
+  ctx.font='bold 52px Arial';ctx.textAlign='center';
+  ctx.fillText(msgs[jsPhase],cx,H-50);ctx.shadowBlur=0;
+  // Static noise overlay
+  ctx.fillStyle='rgba(255,0,0,.06)';
+  for(let i=0;i<400;i++)ctx.fillRect(Math.random()*W,Math.random()*H,Math.random()*4+1,Math.random()*4+1);
+  ctx.globalAlpha=1;
 }
 
 const CHARS=[
@@ -864,7 +878,7 @@ function init(){
 }
 function startGame(){
   charSelectStep=0;
-  jsTimer=3200;jsActive=0;
+  jsTimer=difficulty==='nm_extreme'?300:difficulty==='nm_hard'?600:900;jsActive=0;
   p1=mkPlayer(2*T,GY-50,1);
   p2=mkPlayer(3*T,GY-50,2);
   if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;}
