@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Super Mario Bros - Multiplayer</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Courier New',monospace;overflow:hidden}
@@ -34,6 +35,8 @@ canvas{display:block;border:3px solid #444;border-top:none;border-radius:0 0 4px
   <span>LIVES: <b id="h2Lives">×3</b></span>
 </div>
 <canvas id="c" width="800" height="432"></canvas>
+<input id="codeInput" type="text" maxlength="6" placeholder="e.g. AB3X7K"
+  style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,20px);font-size:28px;text-align:center;width:220px;padding:10px;background:#0a0a20;color:#ffd700;border:3px solid #ffd700;border-radius:10px;letter-spacing:6px;text-transform:uppercase;outline:none;z-index:99">
 <div id="overlay"></div>
 <div id="hint">P1: ←→ move · Z/↑ jump (double jump!) · X fire (5 shots, reloads)&nbsp;&nbsp;|&nbsp;&nbsp;P2: A/D move · W jump · Q fire&nbsp;&nbsp;|&nbsp;&nbsp;↓ enter pipe · R restart</div>
 
@@ -45,22 +48,162 @@ const W=800,H=432,T=32,GR=0.52,GY=H-T;
 const K={},KP={};
 document.addEventListener('keydown',e=>{
   if(state==='title'){
-    if(e.code==='Digit1'){gameMode='1p';startGame();}
-    else{gameMode='2p';startGame();}
+    if(e.code==='Digit1'){difficulty='easy';state='modeselect';return;}
+    if(e.code==='Digit2'){difficulty='medium';state='modeselect';return;}
+    if(e.code==='Digit3'){difficulty='hard';state='modeselect';return;}
     return;
   }
+  if(state==='modeselect'){
+    if(e.code==='Escape'){state='title';return;}
+    if(e.code==='Digit1'){gameMode='1p';netRole=null;startGame();return;}
+    if(e.code==='Digit2'){gameMode='2p';netRole=null;startGame();return;}
+    if(e.code==='Digit3'){state='online';netStatus='';return;}
+    return;
+  }
+  if(state==='online'){
+    if(e.code==='Escape'){state='modeselect';return;}
+    if(e.code==='KeyH'||e.code==='Digit1'){state='hosting';hostGame();return;}
+    if(e.code==='KeyJ'||e.code==='Digit2'){state='joining';netStatus='Type the code and press Enter';codeInput.value='';codeInput.style.display='block';codeInput.focus();return;}
+    return;
+  }
+  if(state==='hosting'||state==='joining'){
+    if(e.code==='Escape'){
+      if(peer){peer.destroy();peer=null;}conn=null;netRole=null;
+      codeInput.style.display='none';state='online';netStatus='';return;
+    }
+    return;
+  }
+  // Track guest jump (single-frame signal)
+  if(netRole==='guest'&&e.code==='KeyW')guestJumped=true;
   if(!K[e.code])KP[e.code]=true;
   K[e.code]=true;
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyX','KeyQ'].includes(e.code))e.preventDefault();
   if(e.code==='KeyR')init();
 });
-document.getElementById('c').addEventListener('click',()=>{if(state==='title'){gameMode='2p';startGame();}});
+document.getElementById('c').addEventListener('click',()=>{
+  if(state==='title'){difficulty='medium';state='modeselect';}
+  else if(state==='modeselect'){gameMode='2p';netRole=null;startGame();}
+});
+codeInput.addEventListener('keydown',e=>{
+  if(e.code==='Enter'){state='joining';joinGame(codeInput.value);}
+  e.stopPropagation(); // don't pass keys to game
+});
+codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.toUpperCase();});
 document.addEventListener('keyup',e=>{delete K[e.code];});
 
 let state,camX,particles,popups,coinAnims,fireballs,powerups,lv,timer,timerTick,cpX,worldIdx;
 let p1,p2;
 let gameMode='2p'; // '1p' or '2p'
 let cam1X=0,cam2X=0;
+let difficulty='medium'; // 'easy' | 'medium' | 'hard'
+const DIFF={
+  easy:  {lives:5,speedMult:0.65,timer:500,spawnPct:0.55},
+  medium:{lives:3,speedMult:1.0, timer:400,spawnPct:1.0},
+  hard:  {lives:2,speedMult:1.55,timer:300,spawnPct:1.0},
+};
+
+// ── ONLINE MULTIPLAYER ────────────────────────────────────────────────────
+let netRole=null;      // 'host' | 'guest' | null
+let peer=null,conn=null,roomCode='';
+let netStatus='';      // status text shown on screen
+let guestInput={left:false,right:false,jump:false,down:false,fire:false};
+let guestJumped=false; // single-frame jump signal from guest
+let netFrameTick=0;    // throttle state sends to every 2 frames
+const codeInput=document.getElementById('codeInput');
+
+function genCode(){
+  const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='';for(let i=0;i<6;i++)s+=ch[Math.floor(Math.random()*ch.length)];
+  return s;
+}
+
+function hostGame(){
+  roomCode=genCode();
+  netStatus='Connecting…';
+  try{
+    peer=new Peer(roomCode,{debug:0});
+    peer.on('error',err=>{netStatus='Error: '+err.type+' — try again';});
+    peer.on('open',()=>{netStatus='Waiting for player…';});
+    peer.on('connection',c=>{
+      conn=c;
+      c.on('open',()=>{
+        netRole='host';gameMode='2p';
+        startGame();
+      });
+      c.on('data',d=>{
+        if(d.type==='input'){
+          guestInput={...d};
+          if(d.jump)guestInput.jump=true; // latch until consumed
+        }
+      });
+      c.on('close',()=>{netStatus='Partner disconnected';state='online';netRole=null;conn=null;});
+    });
+  }catch(e){netStatus='PeerJS failed — check your internet';}
+}
+
+function joinGame(code){
+  if(!code||code.length<4){netStatus='Enter the full code!';return;}
+  netStatus='Connecting to '+code+'…';
+  try{
+    if(peer)peer.destroy();
+    peer=new Peer(null,{debug:0});
+    peer.on('error',err=>{netStatus='Could not connect — check the code';});
+    peer.on('open',()=>{
+      conn=peer.connect(code.toUpperCase(),{reliable:true});
+      conn.on('open',()=>{
+        netRole='guest';gameMode='2p';
+        netStatus='Connected! Starting…';
+        codeInput.style.display='none';
+        // Guest starts game visually — host sends real state
+        startGame();
+      });
+      conn.on('data',d=>{
+        if(d.type==='state')applyHostState(d);
+      });
+      conn.on('close',()=>{netStatus='Host disconnected';state='online';netRole=null;conn=null;});
+    });
+  }catch(e){netStatus='PeerJS failed — check your internet';}
+}
+
+function sendState(){
+  if(!conn||!conn.open)return;
+  if(++netFrameTick%2!==0)return; // send at ~30fps
+  conn.send({
+    type:'state',
+    p1:{x:p1.x,y:p1.y,vx:p1.vx,vy:p1.vy,power:p1.power,coins:p1.coins,score:p1.score,
+        lives:p1.lives,dead:p1.dead,outOfLives:p1.outOfLives,invincible:p1.invincible,
+        jumps:p1.jumps,facing:p1.facing,wf:p1.wf,h:p1.h,ammo:p1.ammo},
+    p2:{x:p2.x,y:p2.y,vx:p2.vx,vy:p2.vy,power:p2.power,coins:p2.coins,score:p2.score,
+        lives:p2.lives,dead:p2.dead,outOfLives:p2.outOfLives,invincible:p2.invincible,
+        jumps:p2.jumps,facing:p2.facing,wf:p2.wf,h:p2.h,ammo:p2.ammo},
+    enemies:lv.enemies.map(e=>({x:e.x,y:e.y,alive:e.alive,squished:e.squished,wf:e.wf,type:e.type,shell:e.shell,shellVx:e.shellVx,hp:e.hp})),
+    fireballs:fireballs.map(f=>({x:f.x,y:f.y,alive:f.alive,r:f.r,owner:f.owner,isBoss:f.isBoss})),
+    powerups:powerups.map(p=>({x:p.x,y:p.y,alive:p.alive,type:p.type})),
+    qblocks:lv.qblocks.map(q=>({hit:q.hit,bounceY:q.bounceY})),
+    gs:state,timer:Math.round(timer),lvName:lv.name,
+    cam2X:Math.round(cam2X),
+  });
+}
+
+function applyHostState(d){
+  if(d.lvName&&lv&&d.lvName!==lv.name){loadLevel(d.lvName);return;}
+  Object.assign(p1,d.p1);
+  Object.assign(p2,d.p2);
+  for(let i=0;i<d.enemies.length&&i<lv.enemies.length;i++)Object.assign(lv.enemies[i],d.enemies[i]);
+  fireballs=d.fireballs.map(f=>Object.assign({bounces:99},f));
+  for(let i=0;i<d.powerups.length&&i<powerups.length;i++)Object.assign(powerups[i],d.powerups[i]);
+  if(d.qblocks)for(let i=0;i<d.qblocks.length&&i<lv.qblocks.length;i++)Object.assign(lv.qblocks[i],d.qblocks[i]);
+  timer=d.timer;
+  cam2X=d.cam2X;camX=cam2X; // guest camera tracks P2
+  if(d.gs==='gameover'||d.gs==='win'){state=d.gs;}
+  hud();
+}
+
+function sendGuestInput(){
+  if(!conn||!conn.open)return;
+  conn.send({type:'input',left:K.KeyA,right:K.KeyD,jump:guestJumped,down:K.KeyS,fire:K.KeyQ});
+  guestJumped=false;
+}
 
 // ── HUD ─────────────────────────────────────────────────────────────────
 const PWR=['SMALL','BIG','FIRE'];
@@ -84,7 +227,7 @@ function hud(){
 function mkPlayer(x,y,num){
   return{x,y,w:26,h:36,vx:0,vy:0,onGround:false,jumps:0,
     facing:1,wf:0,wt:0,invincible:0,dead:false,outOfLives:false,pipeTimer:0,
-    num,power:0,score:0,coins:0,lives:3,
+    num,power:0,score:0,coins:0,lives:DIFF[difficulty].lives,
     ammo:5,maxAmmo:5,ammoTimer:0,
     fireCD:0,cpReached:false};
 }
@@ -116,43 +259,71 @@ function overlap(a,b,px=3,py=2){
 // ── LEVEL DATA ───────────────────────────────────────────────────────────
 const WORLDS=['1-1','2-1','3-1'];
 
-// Q blocks are all at y=10-11 (easy to reach), lots more platforms
 const DEFS={
+// ── WORLD 1-1: Grassland ─────────────────────────────────────────────────
 '1-1':{LW:135,name:'1-1',bg:'day',
   pits:[[22,25],[47,50],[72,75],[104,107]],
   bricks:[
-    [3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],
-    [14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],
-    [25,10],[26,10],[27,10],[28,10],[29,10],[30,10],[31,10],[32,10],[33,10],[34,10],[35,10],
-    [38,10],[39,10],[40,10],[41,10],[42,10],[43,10],[44,10],[45,10],[46,10],
-    [50,10],[51,10],[52,10],[53,10],[54,10],[55,10],[56,10],[57,10],[58,10],[59,10],
-    [62,10],[63,10],[64,10],[65,10],[66,10],[67,10],[68,10],[69,10],[70,10],[71,10],
-    [75,10],[76,10],[77,10],[78,10],[79,10],[80,10],[81,10],[82,10],[83,10],[84,10],[85,10],[86,10],[87,10],[88,10],[89,10],
-    [92,10],[93,10],[94,10],[95,10],[96,10],[97,10],[98,10],[99,10],[100,10],[101,10],[102,10],[103,10],
-    [107,10],[108,10],[109,10],[110,10],[111,10],[112,10],[113,10],[114,10],[115,10],[116,10],[117,10],
-    [118,10],[119,10],[120,10],[121,10],[122,10],[123,10],[124,10],[125,10],[126,10],[127,10],[128,10],
-    [129,10],[130,10],[131,10],[132,10],[133,10],[134,10],
+    // Section A — platforms at y=10 (low) and y=8 (mid)
+    [5,10],[6,10],[7,10],
+    [12,8],[13,8],[14,8],
+    [18,8],[19,8],[20,8],[21,8],
+    // Pit 1 stepping stone
+    [23,8],
+    // Section B — y=10, y=8, y=6 (high)
+    [26,10],[27,10],[28,10],[29,10],
+    [33,8],[34,8],[35,8],
+    [38,6],[39,6],[40,6],
+    [42,8],[43,8],[44,8],[45,8],[46,8],
+    // Pit 2 stepping stones
+    [48,8],[49,8],
+    // Section C — three heights
+    [51,10],[52,10],[53,10],
+    [57,8],[58,8],[59,8],
+    [62,6],[63,6],[64,6],
+    [68,8],[69,8],[70,8],[71,8],
+    // Pit 3 stepping stones
+    [73,8],[74,8],
+    // Section D — varied
+    [76,10],[77,10],[78,10],[79,10],[80,10],
+    [84,8],[85,8],[86,8],[87,8],
+    [91,6],[92,6],
+    [95,8],[96,8],[97,8],[98,8],
+    [100,10],[101,10],[102,10],[103,10],
+    // Pit 4 stepping stones
+    [105,8],[106,8],
+    // Final gauntlet
+    [108,10],[109,10],[110,10],
+    [113,8],[114,8],[115,8],
+    [119,6],[120,6],
+    [124,8],[125,8],[126,8],
+    [129,10],[130,10],[131,10],
   ],
   qdata:[
-    [9,7,3,false],[17,7,3,true],[28,7,5,true],[40,7,3,false],
-    [56,7,3,true],[67,7,5,true],[82,7,3,false],[95,7,5,true],
-    [115,7,3,true],[128,7,5,true],
+    [15,7,5,true],
+    [66,7,3,true],
+    [93,7,5,true],
   ],
   pipes:[
-    {tx:12,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:36,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:60,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:90,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:10,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
   ],
   enemies:[
-    [5,'goomba'],[9,'goomba'],[16,'koopa'],[20,'goomba'],
-    [26,'goomba'],[30,'koopa'],[39,'goomba'],[43,'goomba'],
-    [53,'koopa'],[63,'goomba'],[68,'koopa'],
-    [77,'goomba'],[84,'goomba'],[93,'koopa'],[98,'goomba'],
-    [110,'goomba'],[114,'koopa_fly'],[122,'goomba'],[126,'koopa'],
+    // Cluster 1 — mix of ground and platform enemies so you can't just run past
+    [7,'goomba'],[9,'koopa'],[12,'goomba',8],[14,'koopa',8],[19,'koopa'],
+    // Cluster 2
+    [27,'goomba'],[29,'koopa'],[33,'goomba',8],[35,'koopa',8],[38,'koopa_fly'],[43,'goomba',8],[45,'koopa',8],
+    // Cluster 3
+    [52,'goomba'],[54,'koopa'],[57,'koopa',8],[59,'goomba',8],[62,'goomba',6],[64,'koopa',6],[68,'koopa_fly'],[70,'koopa',8],
+    // Cluster 4
+    [77,'goomba'],[79,'koopa'],[80,'goomba'],[84,'goomba',8],[86,'koopa',8],[91,'koopa',6],[95,'goomba',8],[97,'koopa',8],[101,'goomba'],[103,'koopa'],
+    // Final gauntlet
+    [109,'goomba'],[111,'koopa'],[113,'goomba',8],[115,'koopa',8],[119,'koopa_fly'],[120,'goomba',6],[124,'koopa',8],[126,'goomba',8],[129,'goomba'],[130,'koopa'],
   ],
-  checkpoints:[[65]],flag:[131]},
+  checkpoints:[[66]],flag:[132]},
 
+// ── 1-2: Underground ─────────────────────────────────────────────────────
 '1-2':{LW:52,name:'1-2',bg:'underground',ceiling:true,gtype:'stone',
   bricks:[
     [3,9],[4,9],[5,9],[6,9],[7,9],
@@ -165,58 +336,86 @@ const DEFS={
   ],
   qdata:[
     [6,6,5,true],[14,6,5,false],[21,6,7,true],
-    [28,6,5,false],[35,6,5,true],[42,6,7,true],[49,6,5,false],
+    [28,6,5,false],[35,6,5,true],[49,6,5,false],
   ],
   pipes:[{tx:2,h:2,exit:true,dest:'1-1',spawn:[14*T,GY-50]}],
   enemies:[
-    [7,'goomba'],[13,'goomba'],[20,'koopa'],[26,'goomba'],
-    [33,'goomba'],[40,'koopa'],[47,'goomba'],
+    [7,'goomba'],[10,'koopa'],[13,'goomba'],[18,'koopa'],[23,'goomba'],
+    [29,'koopa'],[35,'goomba'],[38,'koopa'],[43,'goomba'],[48,'koopa'],
   ],
   checkpoints:[[26]]},
 
+// ── WORLD 2-1: Desert ────────────────────────────────────────────────────
 '2-1':{LW:148,name:'2-1',bg:'desert',
   pits:[[18,21],[44,47],[70,73],[104,107],[130,133]],
   bricks:[
-    [3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],
-    [16,10],[17,10],
-    [21,10],[22,10],[23,10],[24,10],[25,10],[26,10],[27,10],[28,10],[29,10],[30,10],
-    [31,10],[32,10],[33,10],[34,10],[35,10],[36,10],[37,10],[38,10],[39,10],[40,10],
-    [43,10],
-    [47,10],[48,10],[49,10],[50,10],[51,10],[52,10],[53,10],[54,10],[55,10],[56,10],
-    [57,10],[58,10],[59,10],[60,10],[61,10],[62,10],[63,10],[64,10],[65,10],[66,10],
-    [69,10],
-    [73,10],[74,10],[75,10],[76,10],[77,10],[78,10],[79,10],[80,10],[81,10],[82,10],
-    [83,10],[84,10],[85,10],[86,10],[87,10],[88,10],[89,10],[90,10],[91,10],[92,10],
-    [93,10],[94,10],[95,10],
-    [98,10],[99,10],[100,10],[101,10],[102,10],[103,10],
-    [107,10],[108,10],[109,10],[110,10],[111,10],[112,10],[113,10],[114,10],[115,10],
-    [116,10],[117,10],[118,10],[119,10],[120,10],[121,10],[122,10],[123,10],[124,10],
-    [125,10],[126,10],[127,10],[128,10],[129,10],
-    [133,10],[134,10],[135,10],[136,10],[137,10],[138,10],[139,10],[140,10],[141,10],
-    [142,10],[143,10],[144,10],[145,10],[146,10],[147,10],
+    // Section A
+    [3,10],[4,10],[5,10],[6,10],
+    [9,8],[10,8],[11,8],[12,8],
+    [15,10],[16,10],[17,10],
+    // Pit 1 stepping stone
+    [19,8],
+    // Section B
+    [21,10],[22,10],[23,10],[24,10],[25,10],
+    [28,8],[29,8],[30,8],
+    [33,6],[34,6],[35,6],
+    [38,8],[39,8],[40,8],[41,8],[42,8],[43,8],
+    // Pit 2 stepping stones
+    [45,8],[46,8],
+    // Section C
+    [48,10],[49,10],[50,10],[51,10],
+    [54,8],[55,8],[56,8],
+    [59,6],[60,6],[61,6],
+    [64,8],[65,8],[66,8],[67,8],[68,8],[69,8],
+    // Pit 3 stepping stones
+    [71,8],[72,8],
+    // Section D
+    [74,10],[75,10],[76,10],[77,10],[78,10],
+    [81,8],[82,8],[83,8],[84,8],
+    [88,6],[89,6],[90,6],
+    [93,8],[94,8],[95,8],[96,8],[97,8],
+    [100,10],[101,10],[102,10],[103,10],
+    // Pit 4 stepping stones
+    [105,8],[106,8],
+    // Section E
+    [108,10],[109,10],[110,10],[111,10],
+    [114,8],[115,8],[116,8],[117,8],
+    [121,6],[122,6],
+    [125,8],[126,8],[127,8],[128,8],[129,8],
+    // Pit 5 stepping stones
+    [131,8],[132,8],
+    // Final section
+    [134,10],[135,10],[136,10],[137,10],[138,10],
+    [141,8],[142,8],[143,8],
+    [145,10],[146,10],[147,10],
   ],
   qdata:[
-    [9,7,3,true],[17,7,5,false],[27,7,3,true],[35,7,5,true],
-    [55,7,3,false],[62,7,5,true],[78,7,3,false],[88,7,5,true],
-    [110,7,3,true],[122,7,5,true],[140,7,3,false],
+    [13,7,5,true],
+    [62,7,3,true],
+    [113,7,5,true],
   ],
   pipes:[
-    {tx:14,h:2,dest:'2-2',spawn:[3*T,GY-50]},
-    {tx:41,h:2,dest:'2-2',spawn:[3*T,GY-50]},
-    {tx:67,h:2,dest:'2-2',spawn:[3*T,GY-50]},
-    {tx:96,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:7,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:52,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:98,h:2,dest:'2-2',spawn:[3*T,GY-50]},
   ],
   enemies:[
-    [5,'goomba'],[10,'koopa'],[16,'goomba'],[22,'goomba'],
-    [28,'koopa'],[33,'goomba'],[37,'goomba'],[42,'koopa'],
-    [49,'goomba'],[55,'koopa'],[61,'goomba'],[66,'goomba'],
-    [76,'goomba'],[82,'koopa'],[88,'goomba'],
-    [92,'goomba'],[97,'koopa'],[102,'goomba'],
-    [109,'koopa_fly'],[114,'goomba'],[120,'koopa'],[126,'goomba'],
-    [135,'goomba'],[140,'koopa'],[145,'goomba'],
+    // Cluster 1
+    [5,'goomba'],[7,'koopa'],[9,'goomba',8],[11,'koopa',8],[16,'goomba'],[17,'koopa'],
+    // After pit 1
+    [22,'goomba'],[24,'koopa'],[28,'goomba',8],[30,'koopa',8],[33,'goomba',6],[35,'koopa',6],[38,'koopa_fly'],[40,'goomba',8],[43,'koopa',8],
+    // After pit 2
+    [49,'goomba'],[51,'koopa'],[54,'goomba',8],[56,'koopa',8],[59,'goomba',6],[61,'koopa',6],[64,'koopa_fly'],[67,'goomba',8],[69,'koopa',8],
+    // After pit 3
+    [75,'goomba'],[77,'koopa'],[81,'goomba',8],[83,'koopa',8],[88,'goomba',6],[90,'koopa',6],[93,'koopa_fly'],[95,'goomba',8],[97,'koopa',8],[101,'goomba'],[103,'koopa'],
+    // After pit 4
+    [109,'goomba'],[111,'koopa'],[114,'goomba',8],[116,'koopa',8],[121,'goomba',6],[122,'koopa',6],[125,'koopa_fly'],[127,'goomba',8],[129,'koopa',8],
+    // Final
+    [135,'goomba'],[137,'koopa'],[138,'goomba'],[141,'goomba',8],[143,'koopa',8],[146,'goomba'],[147,'koopa'],
   ],
-  checkpoints:[[73]],flag:[144]},
+  checkpoints:[[73]],flag:[145]},
 
+// ── 2-2: Underground ─────────────────────────────────────────────────────
 '2-2':{LW:62,name:'2-2',bg:'underground',ceiling:true,gtype:'stone',
   bricks:[
     [3,9],[4,9],[5,9],[6,9],[7,9],
@@ -231,41 +430,73 @@ const DEFS={
   ],
   qdata:[
     [6,6,5,true],[13,6,7,true],[20,6,5,false],
-    [27,6,5,true],[34,6,7,true],[41,6,5,false],
-    [48,6,5,true],[55,6,7,true],[61,6,5,false],
+    [27,6,5,true],[34,6,7,true],[48,6,5,true],
   ],
   pipes:[{tx:2,h:2,exit:true,dest:'2-1',spawn:[97*T,GY-50]}],
   enemies:[
-    [6,'goomba'],[12,'koopa'],[19,'goomba'],[25,'goomba'],
-    [32,'koopa'],[38,'goomba'],[44,'koopa'],[50,'goomba'],
-    [56,'koopa'],[60,'goomba'],
+    [6,'goomba'],[9,'koopa'],[12,'goomba'],[16,'koopa'],[20,'goomba'],
+    [25,'koopa'],[29,'goomba'],[33,'koopa'],[37,'goomba'],[41,'koopa'],
+    [45,'goomba'],[49,'koopa'],[53,'goomba'],[58,'koopa'],[61,'goomba'],
   ],
   checkpoints:[[31]]},
 
+// ── WORLD 3-1: Castle ────────────────────────────────────────────────────
 '3-1':{LW:110,name:'3-1',bg:'castle',gtype:'stone',
-  pits:[[15,18],[33,36],[53,56],[73,76]],
+  pits:[[15,18],[33,36],[53,56],[73,76],[88,91]],
   extraStone:[
+    // Section A — ground before lava pit 1
     [3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],
-    [15,10],[16,10],[17,10],
-    [18,10],[19,10],[20,10],[21,10],[22,10],[23,10],[24,10],[25,10],[26,10],[27,10],[28,10],[29,10],[30,10],[31,10],[32,10],
-    [33,10],[34,10],[35,10],
-    [36,10],[37,10],[38,10],[39,10],[40,10],[41,10],[42,10],[43,10],[44,10],[45,10],[46,10],[47,10],[48,10],[49,10],[50,10],[51,10],[52,10],
-    [53,10],[54,10],[55,10],
-    [56,10],[57,10],[58,10],[59,10],[60,10],[61,10],[62,10],[63,10],[64,10],[65,10],[66,10],[67,10],[68,10],[69,10],[70,10],[71,10],[72,10],
-    [73,10],[74,10],[75,10],
-    [76,10],[77,10],[78,10],[79,10],[80,10],[81,10],[82,10],[83,10],[84,10],[85,10],[86,10],[87,10],[88,10],[89,10],
+    // Pit 1 stepping stones (must jump and fight)
+    [16,8],[17,8],
+    // After pit 1 — varied heights
+    [18,10],[19,10],[20,10],[21,10],[22,10],
+    [24,8],[25,8],[26,8],
+    [28,6],[29,6],[30,6],
+    [31,8],[32,8],
+    // Pit 2 stepping stone
+    [34,8],[35,8],
+    // After pit 2
+    [36,10],[37,10],[38,10],[39,10],[40,10],
+    [42,8],[43,8],[44,8],
+    [46,6],[47,6],[48,6],
+    [50,8],[51,8],[52,8],
+    // Pit 3 — narrow stepping stones (hard)
+    [54,7],[55,7],
+    // After pit 3
+    [56,10],[57,10],[58,10],[59,10],[60,10],
+    [62,8],[63,8],[64,8],
+    [66,6],[67,6],
+    [69,8],[70,8],[71,8],[72,8],
+    // Pit 4 stepping stones
+    [74,8],[75,8],
+    // After pit 4
+    [76,10],[77,10],[78,10],[79,10],[80,10],
+    [82,8],[83,8],[84,8],
+    [85,6],[86,6],[87,6],
+    // Pit 5 stepping stones (hardest)
+    [89,7],[90,7],
+    // Final approach to Bowser
+    [91,10],[92,10],[93,10],[94,10],[95,10],[96,10],[97,10],[98,10],
   ],
   qdata:[
-    [6,7,3,true],[22,7,3,true],[40,7,5,true],
-    [60,7,3,true],[80,7,5,true],[95,7,3,true],
+    [22,7,3,true],
+    [68,7,5,true],
   ],
   enemies:[
-    [7,'goomba'],[12,'koopa'],[19,'koopa'],[25,'goomba'],
-    [32,'koopa'],[38,'goomba'],[44,'koopa'],[55,'goomba'],
-    [60,'koopa'],[66,'goomba'],[74,'koopa'],[80,'goomba'],
-    [85,'koopa'],[88,'goomba'],[92,'koopa_fly'],[97,'goomba'],
+    // Dense clusters — nowhere to run
+    [4,'koopa'],[6,'goomba'],[8,'koopa'],[10,'goomba'],[12,'koopa'],[14,'goomba'],
+    // After pit 1
+    [18,'koopa'],[20,'goomba'],[22,'koopa'],[24,'goomba',8],[26,'koopa',8],[28,'goomba',6],[30,'koopa',6],[31,'koopa_fly'],
+    // After pit 2
+    [36,'goomba'],[38,'koopa'],[40,'goomba'],[42,'koopa',8],[44,'goomba',8],[46,'koopa',6],[48,'goomba',6],[50,'koopa_fly'],
+    // After pit 3
+    [56,'koopa'],[58,'goomba'],[60,'koopa'],[62,'goomba',8],[64,'koopa',8],[66,'goomba',6],[67,'koopa_fly'],
+    // After pit 4
+    [76,'goomba'],[78,'koopa'],[80,'goomba'],[82,'koopa',8],[84,'goomba',8],[85,'koopa',6],[87,'goomba',6],[90,'koopa_fly'],
+    // Final gauntlet before Bowser
+    [91,'goomba'],[93,'koopa'],[95,'goomba'],[97,'koopa'],
   ],
-  bowser:[99],checkpoints:[[55]],axe:[106]},
+  bowser:[100],checkpoints:[[55]],axe:[107]},
 };
 
 // ── BUILD LEVEL ───────────────────────────────────────────────────────────
@@ -304,12 +535,16 @@ function buildLevel(def){
   for(let x=4;x<LW-2;x+=5)
     coinObjs.push({x:x*T+16,y:GY-22,collected:false,bob:Math.random()*Math.PI*2});
 
-  for(const[tx,type]of(def.enemies||[])){
+  const d=DIFF[difficulty];
+  const enemyList=(def.enemies||[]).filter((_,i)=>Math.random()<d.spawnPct||(i%3!==2));
+  for(const[tx,type,pty]of enemyList){
     const isK=type==='koopa'||type==='koopa_fly';
-    enemies.push({x:tx*T,y:GY-(isK?36:30),w:isK?26:28,h:isK?36:30,
-      vx:type==='koopa_fly'?0:-1.4,vy:0,onGround:false,
+    const ey=pty!=null?pty*T-(isK?36:30):GY-(isK?36:30);
+    const baseSpd=1.4*d.speedMult;
+    enemies.push({x:tx*T,y:ey,w:isK?26:28,h:isK?36:30,
+      vx:type==='koopa_fly'?0:-baseSpd,vy:0,onGround:false,
       alive:true,squished:false,squishTimer:0,wf:0,wt:0,
-      type,shell:false,shellVx:0,hp:1,flyBase:GY-(isK?36:30),initialized:false,_bnc:true});
+      type,shell:false,shellVx:0,hp:1,flyBase:ey,initialized:false,_bnc:true});
   }
   for(const[tx,ph]of(def.piranhas||[])){
     enemies.push({x:tx*T+4,baseY:GY-ph*T,y:GY,w:24,h:32,vx:0,vy:0,
@@ -349,7 +584,7 @@ function startGame(){
 function loadLevel(name,sx,sy){
   lv=buildLevel(DEFS[name]);
   fireballs=[];powerups=[];particles=[];popups=[];coinAnims=[];
-  timer=400;timerTick=0;
+  timer=DIFF[difficulty].timer;timerTick=0;
   const spx=sx||2*T,spy=sy||GY-50;
   if(!p1.dead){p1.x=spx;p1.y=spy;p1.vx=0;p1.vy=0;p1.pipeTimer=0;p1.jumps=0;}
   if(!p2.dead){p2.x=spx+T;p2.y=spy;p2.vx=0;p2.vy=0;p2.pipeTimer=0;p2.jumps=0;}
@@ -405,6 +640,7 @@ function updPlayer(p,isP1){
   if(p.fireCD>0)p.fireCD--;
   let left,right,jump,down,fire;
   if(isP1){left=K.ArrowLeft;right=K.ArrowRight;jump=KP.ArrowUp||KP.KeyZ;down=K.ArrowDown;fire=K.KeyX&&p.fireCD===0;}
+  else if(netRole==='host'){left=guestInput.left;right=guestInput.right;jump=guestInput.jump;down=guestInput.down;fire=guestInput.fire&&p.fireCD===0;guestInput.jump=false;}
   else{left=K.KeyA;right=K.KeyD;jump=KP.KeyW;down=K.KeyS;fire=K.KeyQ&&p.fireCD===0;}
 
   // Pipe
@@ -560,7 +796,7 @@ function killPlayer(p){
 function updEnemies(){
   for(const e of lv.enemies){
     if(!e.alive)continue;
-    if(e.type==='bowser'){updBowser(e,alive);continue;}
+    if(e.type==='bowser'){updBowser(e,[p1,p2].filter(p=>!p.dead&&!p.outOfLives));continue;}
     if(e.type==='piranha'){updPiranha(e);continue;}
 
     if(e.squished){
@@ -1402,23 +1638,171 @@ function drawTitle(){
   for(const[col,text]of btips){ctx.fillStyle=col;ctx.fillText(text,W/2,ty);ty+=16;}
   ctx.restore();
 
+  // Difficulty buttons
+  ctx.save();ctx.translate(0,330);
+  const diffs=[['1','EASY','#4ef542','5 lives  ·  slow enemies  ·  500 sec'],['2','MEDIUM','#ffd700','3 lives  ·  normal speed  ·  400 sec'],['3','HARD','#ff4444','2 lives  ·  fast enemies  ·  300 sec']];
+  let bx=W/2-230;
+  for(const[key,label,col,desc]of diffs){
+    const bw=150;
+    ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=2;
+    ctx.beginPath();ctx.roundRect(bx,0,bw,72,10);ctx.fill();ctx.stroke();
+    ctx.fillStyle=col;ctx.font='bold 28px Arial';ctx.textAlign='center';
+    ctx.fillText(label,bx+bw/2,30);
+    ctx.fillStyle='#ccc';ctx.font='10px monospace';
+    ctx.fillText(desc,bx+bw/2,48);
+    ctx.fillStyle='#888';ctx.font='12px monospace';
+    ctx.fillText('Press '+key,bx+bw/2,65);
+    bx+=bw+20;
+  }
+  ctx.restore();
+
   // Pulse prompt
   ctx.save();ctx.translate(0,420);
   ctx.globalAlpha=.65+Math.sin(tick*.09)*.35;
   ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=18;
-  ctx.font='bold 19px Arial';ctx.textAlign='center';
-  ctx.fillText('Press 1 — SOLO  |  Press 2 — MULTIPLAYER  |  Click — MULTIPLAYER',W/2,0);
+  ctx.font='bold 16px Arial';ctx.textAlign='center';
+  ctx.fillText('Press 1 · 2 · 3 to choose your difficulty',W/2,0);
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.restore();
+}
+
+function drawModeSelect(){
+  tick++;
+  // Same background
+  const sk=ctx.createLinearGradient(0,0,0,H);
+  sk.addColorStop(0,'#0a1a40');sk.addColorStop(.6,'#0d2a6e');sk.addColorStop(1,'#1a3a8f');
+  ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(255,255,255,.7)';
+  for(let i=0;i<50;i++){const x=(i*137+71)%W,y=(i*97+43)%(H*.55);ctx.beginPath();ctx.arc(x,y,.8+i%3*.5,0,Math.PI*2);ctx.fill();}
+
+  ctx.textAlign='center';
+  // Difficulty badge
+  const dcol=difficulty==='easy'?'#4ef542':difficulty==='hard'?'#ff4444':'#ffd700';
+  ctx.shadowColor=dcol;ctx.shadowBlur=20;
+  ctx.fillStyle=dcol;ctx.font='bold 32px Arial';
+  ctx.fillText(difficulty.toUpperCase()+' MODE',W/2,80);
+  ctx.shadowBlur=0;
+
+  ctx.fillStyle='#fff';ctx.font='bold 22px Arial';
+  ctx.fillText('Choose how to play:',W/2,130);
+
+  // 1P / local 2P / Online buttons
+  const modes=[['1','SOLO','#ff8a80','Just you vs the world'],['2','LOCAL 2P','#69db7c','Same computer splitscreen'],['3','ONLINE','#4af','Different computers']];
+  let mx=W/2-265;
+  for(const[key,label,col,desc]of modes){
+    const bw=165;
+    ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=2;
+    ctx.beginPath();ctx.roundRect(mx,148,bw,95,12);ctx.fill();ctx.stroke();
+    ctx.fillStyle=col;ctx.font='bold 26px Arial';ctx.textAlign='center';
+    ctx.fillText(label,mx+bw/2,185);
+    ctx.fillStyle='#ccc';ctx.font='11px monospace';
+    ctx.fillText(desc,mx+bw/2,205);
+    ctx.fillStyle='#888';ctx.font='13px monospace';
+    ctx.fillText('Press '+key,mx+bw/2,228);
+    mx+=bw+17;
+  }
+
+  // Controls reminder
+  ctx.fillStyle='#aaa';ctx.font='11px monospace';ctx.textAlign='center';
+  ctx.fillText('P1: Arrow Keys + Z jump + X fire  |  P2: WASD + W jump + Q fire',W/2,278);
+  ctx.fillText('Double jump · Stomp enemies · Hit ? blocks from below · Enter pipes with Down',W/2,296);
+
+  ctx.globalAlpha=.65+Math.sin(tick*.09)*.35;
+  ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=14;
+  ctx.font='bold 15px Arial';
+  ctx.fillText('Press 1 · 2 · 3  to choose',W/2,340);
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+}
+
+// ── ONLINE SCREENS ────────────────────────────────────────────────────────
+function _netBG(){
+  tick++;
+  const sk=ctx.createLinearGradient(0,0,0,H);
+  sk.addColorStop(0,'#030a20');sk.addColorStop(1,'#0a1540');
+  ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
+  // Grid lines
+  ctx.strokeStyle='rgba(0,100,255,.08)';ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+function _netTitle(t,sub){
+  ctx.textAlign='center';
+  ctx.shadowColor='#4af';ctx.shadowBlur=28;
+  ctx.fillStyle='#4af';ctx.font='bold 44px Arial';ctx.fillText(t,W/2,80);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#aaa';ctx.font='16px monospace';ctx.fillText(sub,W/2,110);
+}
+function _netBtn(x,y,w,h,key,label,desc,col){
+  ctx.fillStyle=col+'22';ctx.strokeStyle=col;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.roundRect(x,y,w,h,12);ctx.fill();ctx.stroke();
+  ctx.fillStyle=col;ctx.font='bold 30px Arial';ctx.textAlign='center';ctx.fillText(label,x+w/2,y+38);
+  ctx.fillStyle='#bbb';ctx.font='12px monospace';ctx.fillText(desc,x+w/2,y+58);
+  ctx.fillStyle='#666';ctx.font='11px monospace';ctx.fillText('Press '+key,x+w/2,y+74);
+}
+
+function drawOnlineMenu(){
+  _netBG();
+  _netTitle('ONLINE MULTIPLAYER','Play with a friend on another computer over the internet');
+  _netBtn(W/2-210,140,190,90,'H or 1','HOST','Create a room — get a code',  '#ffd700');
+  _netBtn(W/2+20, 140,190,90,'J or 2','JOIN','Enter a friend\'s code','#4af');
+  ctx.fillStyle='#555';ctx.font='11px monospace';ctx.textAlign='center';
+  ctx.fillText('Powered by WebRTC (PeerJS) — direct connection, no server needed',W/2,260);
+  ctx.fillText('Both players need internet access · Works across different networks',W/2,278);
+  ctx.globalAlpha=.55;ctx.fillStyle='#888';ctx.fillText('Esc — back',W/2,H-16);ctx.globalAlpha=1;
+}
+
+function drawHosting(){
+  _netBG();
+  _netTitle('HOST GAME','Share this code with your friend — they enter it to join');
+  // Big code display
+  if(roomCode){
+    ctx.fillStyle='rgba(255,215,0,.08)';ctx.strokeStyle='#ffd700';ctx.lineWidth=2;
+    ctx.beginPath();ctx.roundRect(W/2-160,130,320,100,16);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=18;
+    ctx.font='bold 56px monospace';ctx.textAlign='center';
+    ctx.fillText(roomCode,W/2,200);
+    ctx.shadowBlur=0;
+  }
+  // Spinner / status
+  const dots='.'.repeat(1+(Math.floor(tick/20)%3));
+  ctx.fillStyle='#4af';ctx.font='18px monospace';ctx.textAlign='center';
+  ctx.fillText(netStatus||('Waiting for player'+dots),W/2,265);
+  if(netStatus.startsWith('Error')){ctx.fillStyle='#f55';ctx.fillText(netStatus,W/2,290);}
+  ctx.globalAlpha=.55;ctx.fillStyle='#888';ctx.font='11px monospace';
+  ctx.fillText('Esc — cancel',W/2,H-16);ctx.globalAlpha=1;
+}
+
+function drawJoining(){
+  _netBG();
+  _netTitle('JOIN GAME','Type your friend\'s 6-letter code in the box below');
+  ctx.fillStyle='#aaa';ctx.font='14px monospace';ctx.textAlign='center';
+  ctx.fillText('↓  type here, then press Enter  ↓',W/2,148);
+  // Status
+  if(netStatus){
+    const col=netStatus.includes('Could not')||netStatus.includes('Enter')?'#f88':'#4af';
+    ctx.fillStyle=col;ctx.font='15px monospace';ctx.fillText(netStatus,W/2,320);
+  }
+  ctx.globalAlpha=.55;ctx.fillStyle='#888';ctx.font='11px monospace';
+  ctx.fillText('Esc — cancel',W/2,H-16);ctx.globalAlpha=1;
 }
 
 // ── MAIN LOOP ──────────────────────────────────────────────────────────────
 function loop(){
   ctx.clearRect(0,0,W,H);
   if(state==='title'){drawTitle();requestAnimationFrame(loop);return;}
+  if(state==='modeselect'){drawModeSelect();requestAnimationFrame(loop);return;}
+  if(state==='online'){drawOnlineMenu();requestAnimationFrame(loop);return;}
+  if(state==='hosting'){drawHosting();requestAnimationFrame(loop);return;}
+  if(state==='joining'){drawJoining();requestAnimationFrame(loop);return;}
   if(state==='play'||state==='transition'){
-    updPlayer(p1,true);if(gameMode==='2p')updPlayer(p2,false);
-    updEnemies();updFireballs();updPowerups();updParticles();updTimer();updCam();
+    if(netRole==='guest'){
+      sendGuestInput(); // guest just sends keys, host runs physics
+    }else{
+      updPlayer(p1,true);
+      if(gameMode==='2p'||netRole==='host')updPlayer(p2,false);
+      updEnemies();updFireballs();updPowerups();updParticles();updTimer();updCam();
+      if(netRole==='host')sendState();
+    }
   }
   tick++;
   // Clear KP after each frame
@@ -1450,7 +1834,21 @@ function loop(){
     ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText(label,px,yOff+9);
   }
 
-  if(gameMode==='1p'){
+  if(netRole==='host'){
+    // Host: fullscreen, camera follows P1
+    camX=cam1X;
+    drawScene();
+    drawReloadBar(p1,4,'#f80');
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,110,14);
+    ctx.fillStyle='#ff8a80';ctx.font='bold 10px monospace';ctx.textAlign='left';ctx.fillText('YOU (P1) — HOST',4,10);
+    ctx.fillStyle='#aaa';ctx.font='9px monospace';ctx.fillText('Code: '+roomCode,4,H-6);
+  }else if(netRole==='guest'){
+    // Guest: fullscreen, camera already set to cam2X by applyHostState
+    drawScene();
+    drawReloadBar(p2,4,'#4d4');
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,120,14);
+    ctx.fillStyle='#69db7c';ctx.font='bold 10px monospace';ctx.textAlign='left';ctx.fillText('YOU (P2) — ONLINE',4,10);
+  }else if(gameMode==='1p'){
     drawScene();
     drawReloadBar(p1,4,'#f80');
     if(!p1.dead){const px=Math.max(14,Math.min(p1.x-camX,W-28));ctx.fillStyle='rgba(200,40,40,.85)';ctx.beginPath();ctx.roundRect(px-12,2,26,11,[4]);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.fillText('P1',px,9);}
