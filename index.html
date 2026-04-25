@@ -84,11 +84,6 @@ document.getElementById('c').addEventListener('click',()=>{
   if(state==='title'){difficulty='medium';state='modeselect';}
   else if(state==='modeselect'){gameMode='2p';netRole=null;startGame();}
 });
-codeInput.addEventListener('keydown',e=>{
-  if(e.code==='Enter'){state='joining';joinGame(codeInput.value);}
-  e.stopPropagation(); // don't pass keys to game
-});
-codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.toUpperCase();});
 document.addEventListener('keyup',e=>{delete K[e.code];});
 
 let state,camX,particles,popups,coinAnims,fireballs,powerups,lv,timer,timerTick,cpX,worldIdx;
@@ -110,6 +105,11 @@ let guestInput={left:false,right:false,jump:false,down:false,fire:false};
 let guestJumped=false; // single-frame jump signal from guest
 let netFrameTick=0;    // throttle state sends to every 2 frames
 const codeInput=document.getElementById('codeInput');
+codeInput.addEventListener('keydown',e=>{
+  if(e.code==='Enter'){state='joining';joinGame(codeInput.value);}
+  e.stopPropagation();
+});
+codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.toUpperCase();});
 
 function genCode(){
   const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
