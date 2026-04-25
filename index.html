@@ -83,6 +83,7 @@ document.addEventListener('keydown',e=>{
     if(e.code==='Digit1'){difficulty='easy';state='modeselect';return;}
     if(e.code==='Digit2'){difficulty='medium';state='modeselect';return;}
     if(e.code==='Digit3'){difficulty='hard';state='modeselect';return;}
+    if(e.code==='Digit4'){difficulty='nightmare';jsTimer=3200;state='modeselect';return;}
     return;
   }
   if(state==='modeselect'){
@@ -156,12 +157,67 @@ let shakeX=0,shakeY=0;
 function shake(amt=6){shakeX=(Math.random()-.5)*amt*2;shakeY=(Math.random()-.5)*amt*2;}
 let stats={kills:0,deaths:0,startTime:0,fireballs:0};
 let p1LastL=0,p1LastR=0,p2LastL=0,p2LastR=0,p1DashDir=0,p2DashDir=0;
-let difficulty='medium'; // 'easy' | 'medium' | 'hard'
+let difficulty='medium'; // 'easy' | 'medium' | 'hard' | 'nightmare'
 const DIFF={
-  easy:  {lives:3,speedMult:1.0, timer:400,spawnPct:1.0},
-  medium:{lives:2,speedMult:1.3, timer:350,spawnPct:1.0},
-  hard:  {lives:1,speedMult:1.6, timer:250,spawnPct:1.0},
+  easy:      {lives:3,speedMult:1.0, timer:400,spawnPct:1.0},
+  medium:    {lives:2,speedMult:1.3, timer:350,spawnPct:1.0},
+  hard:      {lives:1,speedMult:1.6, timer:250,spawnPct:1.0},
+  nightmare: {lives:1,speedMult:2.5, timer:180,spawnPct:1.0},
 };
+
+// ── JUMPSCARE ────────────────────────────────────────────────────────────────
+let jsTimer=3200,jsActive=0,jsPhase=0;
+let _ac=null;
+function getAC(){if(!_ac)try{_ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}return _ac;}
+function playScreech(){
+  const ac=getAC();if(!ac)return;
+  try{
+    const buf=ac.createBuffer(1,Math.floor(ac.sampleRate*.9),ac.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+    const ns=ac.createBufferSource();ns.buffer=buf;
+    const osc=ac.createOscillator();
+    osc.frequency.setValueAtTime(1400,ac.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80,ac.currentTime+.9);
+    const g=ac.createGain();
+    g.gain.setValueAtTime(.55,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.9);
+    osc.connect(g);ns.connect(g);g.connect(ac.destination);
+    osc.start();ns.start();osc.stop(ac.currentTime+.9);ns.stop(ac.currentTime+.9);
+    setTimeout(()=>{try{ac.close();}catch(e){}; _ac=null;},1200);
+  }catch(err){}
+}
+function triggerJumpscare(){
+  jsActive=55;jsPhase=Math.floor(Math.random()*5);
+  playScreech();
+  jsTimer=1800+Math.floor(Math.random()*2400);
+}
+function drawJumpscare(){
+  const fade=jsActive>45?.95:(jsActive/45)*.95;
+  ctx.fillStyle=`rgba(0,0,0,${fade})`;ctx.fillRect(0,0,W,H);
+  if(jsActive<45){
+    const a=jsActive/45;
+    // Eyes
+    for(const[ex,ey] of[[W/2-100,H/2-50],[W/2+100,H/2-50]]){
+      const eg=ctx.createRadialGradient(ex,ey,0,ex,ey,60);
+      eg.addColorStop(0,'#ffffff');eg.addColorStop(.25,'#ff3300');eg.addColorStop(1,'rgba(80,0,0,0)');
+      ctx.globalAlpha=a;ctx.fillStyle=eg;ctx.beginPath();ctx.ellipse(ex,ey,65,48,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(ex,ey+6,20,26,0,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    // Jagged grin
+    ctx.strokeStyle=`rgba(255,0,0,${a})`;ctx.lineWidth=5;ctx.beginPath();
+    let gx=W/2-100,gy=H/2+40;ctx.moveTo(gx,gy);
+    for(let i=0;i<=10;i++){gx+=20;gy=H/2+40+(i%2===0?18:-5);ctx.lineTo(gx,gy);}
+    ctx.stroke();
+    // Scary message
+    const msgs=['YOU CANNOT ESCAPE','THEY SEE YOU','NO WAY OUT','IM WATCHING','RUN. NOW.'];
+    ctx.fillStyle=`rgba(255,0,0,${a})`;ctx.shadowColor='#ff0000';ctx.shadowBlur=30;
+    ctx.font='bold 44px Arial';ctx.textAlign='center';
+    ctx.fillText(msgs[jsPhase],W/2,H-55);ctx.shadowBlur=0;
+    // Static noise
+    ctx.fillStyle=`rgba(255,0,0,${a*.07})`;
+    for(let i=0;i<300;i++)ctx.fillRect(Math.random()*W,Math.random()*H,Math.random()*3+1,Math.random()*3+1);
+  }
+}
 
 const CHARS=[
   {id:'zane', name:'ZANE',  color:'#ff4444', desc:'Balanced fighter',    spd:5.2, jump:-13.5, jumps:2, fireRate:1.0, icon:'Z'},
@@ -401,6 +457,7 @@ const DEFS={
     {tx:31,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:78,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
   ],
   enemies:[
     // Cluster 1 — mix of ground and platform enemies so you can't just run past
@@ -415,6 +472,21 @@ const DEFS={
     [109,'goomba'],[111,'koopa'],[113,'goomba',8],[115,'koopa',8],[119,'koopa_fly'],[120,'goomba',6],[124,'koopa',8],[126,'goomba',8],[129,'goomba'],[130,'koopa'],
   ],
   checkpoints:[[66]],flag:[132]},
+
+// ── SECRET-1: Hidden Bonus Room ───────────────────────────────────────────
+'secret-1':{LW:28,name:'secret-1',bg:'secret',gtype:'stone',
+  bricks:[
+    [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],[22,10],[23,10],[24,10],[25,10],
+    [4,7],[5,7],[6,7],[8,7],[9,7],[11,7],[12,7],[14,7],[15,7],[17,7],[18,7],[20,7],[21,7],[23,7],[24,7],
+    [6,4],[7,4],[8,4],[11,4],[12,4],[13,4],[16,4],[17,4],[18,4],[21,4],[22,4],[23,4],
+  ],
+  qdata:[
+    [4,6,10,true],[8,6,10,true],[12,6,10,true],[16,6,10,true],[20,6,10,true],[24,6,10,true],
+    [6,3,15,true],[10,3,15,true],[14,3,15,true],[18,3,15,true],[22,3,15,true],
+  ],
+  pipes:[{tx:1,h:2,exit:true,dest:'1-1',spawn:[80*T,GY-50]}],
+  enemies:[],
+  checkpoints:[]},
 
 // ── 1-2: Underground ─────────────────────────────────────────────────────
 '1-2':{LW:52,name:'1-2',bg:'underground',ceiling:true,gtype:'stone',
@@ -682,6 +754,7 @@ function init(){
 }
 function startGame(){
   charSelectStep=0;
+  jsTimer=3200;jsActive=0;
   p1=mkPlayer(2*T,GY-50,1);
   p2=mkPlayer(3*T,GY-50,2);
   if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;}
@@ -1168,8 +1241,73 @@ function updCam(){
 }
 
 // ── DRAW ──────────────────────────────────────────────────────────────────
+function drawNightmareBG(){
+  // Hellish crimson void
+  const sk=ctx.createLinearGradient(0,0,0,H);
+  sk.addColorStop(0,'#000000');sk.addColorStop(.45,'#120000');sk.addColorStop(1,'#220000');
+  ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
+  // Blood moon
+  const mx=W-130-camX*.025,my=55;
+  const mg=ctx.createRadialGradient(mx,my,0,mx,my,55);
+  mg.addColorStop(0,'#ff5533');mg.addColorStop(.5,'#aa0000');mg.addColorStop(1,'rgba(60,0,0,0)');
+  ctx.fillStyle=mg;ctx.shadowColor='#ff2200';ctx.shadowBlur=50;
+  ctx.beginPath();ctx.arc(mx,my,38,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+  // Craters on moon
+  ctx.fillStyle='rgba(0,0,0,.3)';
+  ctx.beginPath();ctx.arc(mx-10,my+8,10,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(mx+14,my-10,7,0,Math.PI*2);ctx.fill();
+  // Flickering red lightning
+  if(Math.random()<.012){
+    ctx.save();ctx.strokeStyle=`rgba(255,${Math.floor(Math.random()*60)},0,.85)`;ctx.lineWidth=2;ctx.shadowColor='#ff0000';ctx.shadowBlur=12;
+    ctx.beginPath();let lx=Math.random()*W,ly=0;ctx.moveTo(lx,ly);
+    while(ly<H*.65){ly+=18+Math.random()*28;lx+=Math.random()*70-35;ctx.lineTo(lx,ly);}
+    ctx.stroke();ctx.restore();
+  }
+  // Floating evil eyes in bg
+  for(let i=0;i<7;i++){
+    const ex=((i*317+tick*.4+camX*.015)%(W+60))-30;
+    const ey=50+i*48+Math.sin(tick*.025+i)*18;
+    const ea=.15+Math.abs(Math.sin(tick*.04+i))*.2;
+    ctx.globalAlpha=ea;ctx.fillStyle='#ff2200';ctx.shadowColor='#ff0000';ctx.shadowBlur=6;
+    ctx.beginPath();ctx.ellipse(ex,ey,11,7,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#000';ctx.beginPath();ctx.arc(ex,ey,3,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;ctx.shadowBlur=0;
+  }
+  // Distant dark hills (silhouette)
+  ctx.fillStyle='#0d0000';
+  ctx.beginPath();ctx.moveTo(-20,GY);
+  for(let x=-20;x<=W+20;x+=18){ctx.lineTo(x,GY-50-Math.abs(Math.sin((x+camX*.06)*.025))*80-Math.abs(Math.sin((x+camX*.04)*.018))*50);}
+  ctx.lineTo(W+20,GY);ctx.closePath();ctx.fill();
+}
+
 function drawBG(){
   const bg=lv.bg;
+  if(difficulty==='nightmare'){drawNightmareBG();return;}
+  if(bg==='secret'){
+    const sk=ctx.createLinearGradient(0,0,0,H);
+    sk.addColorStop(0,'#0a0020');sk.addColorStop(.5,'#160040');sk.addColorStop(1,'#0a0030');
+    ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
+    // Sparkles
+    for(let i=0;i<80;i++){
+      const sx2=((i*173+tick*1.2)%W+W)%W,sy2=((i*97+43+tick*.4)%(H*.8));
+      ctx.globalAlpha=.3+Math.abs(Math.sin(tick*.05+i))*.7;
+      ctx.fillStyle=i%3===0?'#ffd700':i%3===1?'#fff':'#aaf';
+      ctx.beginPath();ctx.arc(sx2,sy2,.5+i%3*.5,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // Gold shimmer at top
+    const sg=ctx.createLinearGradient(0,0,0,60);
+    sg.addColorStop(0,'rgba(255,215,0,.12)');sg.addColorStop(1,'rgba(255,215,0,0)');
+    ctx.fillStyle=sg;ctx.fillRect(0,0,W,60);
+    // Banner
+    ctx.fillStyle='rgba(255,215,0,.9)';ctx.shadowColor='#ffd700';ctx.shadowBlur=20;
+    ctx.font='bold 28px Arial';ctx.textAlign='center';
+    ctx.fillText('★  SECRET ROOM  ★',W/2,36);
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,.55)';ctx.font='13px monospace';
+    ctx.fillText('Hit all the ? blocks!  Exit pipe on the left.',W/2,56);
+    return;
+  }
   if(bg==='underground'){
     ctx.fillStyle='#0a0a12';ctx.fillRect(0,0,W,H);
     // Subtle brick pattern
@@ -1330,11 +1468,11 @@ function drawCloud(cx,cy,s){
 
 function drawTile(sx,sy,type){
   if(type==='ground'){
-    const isD=lv.bg==='desert',isCastle=lv.bg==='castle';
-    ctx.fillStyle=isD?'#b87830':isCastle?'#3a3030':'#8b4513';ctx.fillRect(sx,sy,T,T);
+    const isD=lv.bg==='desert',isCastle=lv.bg==='castle',isNM=difficulty==='nightmare';
+    ctx.fillStyle=isNM?'#1a0000':isD?'#b87830':isCastle?'#3a3030':'#8b4513';ctx.fillRect(sx,sy,T,T);
     // Top surface
-    ctx.fillStyle=isD?'#d4a04a':isCastle?'#4a4040':'#228b22';ctx.fillRect(sx,sy,T,10);
-    ctx.fillStyle=isD?'#e0b060':isCastle?'#555050':'#33aa33';ctx.fillRect(sx+2,sy,5,6);ctx.fillRect(sx+14,sy,4,7);ctx.fillRect(sx+24,sy-1,4,5);
+    ctx.fillStyle=isNM?'#550000':isD?'#d4a04a':isCastle?'#4a4040':'#228b22';ctx.fillRect(sx,sy,T,10);
+    ctx.fillStyle=isNM?'#770000':isD?'#e0b060':isCastle?'#555050':'#33aa33';ctx.fillRect(sx+2,sy,5,6);ctx.fillRect(sx+14,sy,4,7);ctx.fillRect(sx+24,sy-1,4,5);
     // Dirt/rock texture
     ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(sx+6,sy+14,8,2);ctx.fillRect(sx+18,sy+22,6,2);ctx.fillRect(sx+4,sy+26,8,2);
   }else if(type==='brick'){
@@ -1388,17 +1526,28 @@ function drawPipe(p){
     (!p1.dead&&p1.x+p1.w>p.x+4&&p1.x<p.x+p.w-4&&p1.y+p1.h>=p.y&&p1.y+p1.h<=p.y+T)||
     (!p2.dead&&p2.x+p2.w>p.x+4&&p2.x<p.x+p.w-4&&p2.y+p2.h>=p.y&&p2.y+p2.h<=p.y+T)
   );
-  if(entering){ctx.save();ctx.shadowColor='#0f0';ctx.shadowBlur=18;}
-  // Pipe body
+  const isSecret=p.secret&&!p.exit;
+  const glowCol=isSecret?'#ffd700':'#0f0';
+  if(entering){ctx.save();ctx.shadowColor=glowCol;ctx.shadowBlur=18;}
+  // Secret pipe is gold, normal is green
+  const c1=isSecret?'#5a3a00':'#1a5e1a',c2=isSecret?'#c8860a':'#2e8b2e',c3=isSecret?'#a07008':'#2d7a2d',c4=isSecret?'#e8a820':'#4caf50',c5=isSecret?'#3d2800':'#0d3d0d';
   const pg=ctx.createLinearGradient(sx,0,sx+p.w,0);
-  pg.addColorStop(0,'#1a5e1a');pg.addColorStop(.35,'#2e8b2e');pg.addColorStop(.65,'#2e8b2e');pg.addColorStop(1,'#1a5e1a');
+  pg.addColorStop(0,c1);pg.addColorStop(.35,c2);pg.addColorStop(.65,c2);pg.addColorStop(1,c1);
   ctx.fillStyle=pg;ctx.fillRect(sx+3,p.y+T,p.w-6,p.h-T);
-  // Pipe head
-  ctx.fillStyle='#2d7a2d';ctx.fillRect(sx,p.y,p.w,T);
+  ctx.fillStyle=c3;ctx.fillRect(sx,p.y,p.w,T);
   const hg=ctx.createLinearGradient(sx,0,sx+p.w,0);
-  hg.addColorStop(0,'#1a5e1a');hg.addColorStop(.3,'#4caf50');hg.addColorStop(.7,'#4caf50');hg.addColorStop(1,'#1a5e1a');
+  hg.addColorStop(0,c1);hg.addColorStop(.3,c4);hg.addColorStop(.7,c4);hg.addColorStop(1,c1);
   ctx.fillStyle=hg;ctx.fillRect(sx+1,p.y+1,p.w-2,T-2);
-  ctx.strokeStyle='#0d3d0d';ctx.lineWidth=2;ctx.strokeRect(sx,p.y,p.w,T);ctx.strokeRect(sx+3,p.y+T,p.w-6,p.h-T);
+  ctx.strokeStyle=c5;ctx.lineWidth=2;ctx.strokeRect(sx,p.y,p.w,T);ctx.strokeRect(sx+3,p.y+T,p.w-6,p.h-T);
+  // Secret pipe sparkles
+  if(isSecret){
+    const sp=Math.sin(tick*.08)*4;
+    ctx.fillStyle='rgba(255,215,0,.8)';ctx.shadowColor='#ffd700';ctx.shadowBlur=6;
+    ctx.beginPath();ctx.arc(sx+p.w/2,p.y-6+sp,4,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(sx+6,p.y-4+sp*.7,3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(sx+p.w-6,p.y-3+sp*.5,3,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+  }
   if(entering){ctx.restore();ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 16px Arial';ctx.textAlign='center';ctx.fillText('↓',sx+p.w/2,p.y-10);}
 }
 
@@ -1885,29 +2034,44 @@ function drawTitle(){
   }
 
   // Difficulty buttons
-  ctx.save();ctx.translate(0,330);
-  const diffs=[['1','NORMAL','#4ef542','3 lives  ·  normal speed  ·  400 sec'],['2','HARD','#ffd700','2 lives  ·  faster enemies  ·  350 sec'],['3','EXTREME','#ff4444','1 life  ·  fast enemies  ·  250 sec']];
-  let bx=W/2-230;
+  ctx.save();ctx.translate(0,320);
+  const diffs=[['1','NORMAL','#4ef542','3 lives  ·  normal speed'],['2','HARD','#ffd700','2 lives  ·  faster enemies'],['3','EXTREME','#ff4444','1 life  ·  fast enemies']];
+  let bx=W/2-290;
   for(const[key,label,col,desc]of diffs){
-    const bw=150;
+    const bw=138;
     ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=2;
     ctx.beginPath();ctx.roundRect(bx,0,bw,72,10);ctx.fill();ctx.stroke();
-    ctx.fillStyle=col;ctx.font='bold 28px Arial';ctx.textAlign='center';
-    ctx.fillText(label,bx+bw/2,30);
+    ctx.fillStyle=col;ctx.font='bold 24px Arial';ctx.textAlign='center';
+    ctx.fillText(label,bx+bw/2,28);
     ctx.fillStyle='#ccc';ctx.font='10px monospace';
-    ctx.fillText(desc,bx+bw/2,48);
+    ctx.fillText(desc,bx+bw/2,46);
     ctx.fillStyle='#888';ctx.font='12px monospace';
-    ctx.fillText('Press '+key,bx+bw/2,65);
-    bx+=bw+20;
+    ctx.fillText('Press '+key,bx+bw/2,63);
+    bx+=bw+14;
   }
+  // Nightmare button — scary pulsing
+  const nmPulse=Math.abs(Math.sin(tick*.06));
+  const nmCol=`rgb(${Math.floor(180+75*nmPulse)},0,0)`;
+  ctx.shadowColor='#ff0000';ctx.shadowBlur=10+nmPulse*14;
+  ctx.fillStyle='rgba(80,0,0,.6)';ctx.strokeStyle=nmCol;ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(bx,0,138,72,10);ctx.fill();ctx.stroke();
+  ctx.fillStyle=nmCol;ctx.font='bold 20px Arial';ctx.textAlign='center';
+  ctx.fillText('☠ NIGHTMARE',bx+69,28);
+  ctx.fillStyle='#ff8888';ctx.font='10px monospace';ctx.shadowBlur=0;
+  ctx.fillText('1 life · max speed',bx+69,46);
+  ctx.fillStyle='#ff4444';ctx.font='10px monospace';
+  ctx.fillText('JUMPSCARES ON',bx+69,59);
+  ctx.fillStyle='#cc4444';ctx.font='12px monospace';
+  ctx.fillText('Press 4',bx+69,70);
+  ctx.shadowBlur=0;
   ctx.restore();
 
   // Pulse prompt
-  ctx.save();ctx.translate(0,420);
+  ctx.save();ctx.translate(0,408);
   ctx.globalAlpha=.65+Math.sin(tick*.09)*.35;
   ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=18;
-  ctx.font='bold 16px Arial';ctx.textAlign='center';
-  ctx.fillText('Press 1 · 2 · 3 to choose your difficulty',W/2,0);
+  ctx.font='bold 15px Arial';ctx.textAlign='center';
+  ctx.fillText('Press 1 · 2 · 3 · 4 to choose your difficulty',W/2,0);
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.restore();
 }
@@ -1923,7 +2087,7 @@ function drawModeSelect(){
 
   ctx.textAlign='center';
   // Difficulty badge
-  const dcol=difficulty==='easy'?'#4ef542':difficulty==='hard'?'#ff4444':'#ffd700';
+  const dcol=difficulty==='nightmare'?'#ff0000':difficulty==='easy'?'#4ef542':difficulty==='hard'?'#ff4444':'#ffd700';
   ctx.shadowColor=dcol;ctx.shadowBlur=20;
   ctx.fillStyle=dcol;ctx.font='bold 32px Arial';
   ctx.fillText(difficulty.toUpperCase()+' MODE',W/2,80);
@@ -2201,6 +2365,11 @@ function loop(){
     }
   }
   tick++;
+  // Jumpscare countdown (nightmare mode only, during play)
+  if(difficulty==='nightmare'&&(state==='play'||state==='miniboss')){
+    if(jsActive>0){jsActive--;}
+    else{jsTimer--;if(jsTimer<=0)triggerJumpscare();}
+  }
   // Clear KP after each frame
   for(const k in KP)delete KP[k];
 
@@ -2212,6 +2381,25 @@ function loop(){
       else if(e.type==='koopa'||e.type==='koopa_fly')drawKoopa(e);
       else if(e.type==='piranha')drawPiranha(e);
       else if(e.type==='bowser')drawBowser(e);
+    }
+    // Nightmare: glowing red eyes on all alive enemies
+    if(difficulty==='nightmare'){
+      for(const e of lv.enemies){
+        if(!e.alive||e.squished)continue;
+        const ex=e.x-camX,ey=e.y;
+        const eyeY=ey+e.h*.28,eyeOff=e.w*.2;
+        for(const ox of[-eyeOff,eyeOff]){
+          const eg=ctx.createRadialGradient(ex+e.w/2+ox,eyeY,0,ex+e.w/2+ox,eyeY,7);
+          eg.addColorStop(0,'#ffffff');eg.addColorStop(.4,'#ff2200');eg.addColorStop(1,'rgba(150,0,0,0)');
+          ctx.fillStyle=eg;ctx.shadowColor='#ff0000';ctx.shadowBlur=8;
+          ctx.beginPath();ctx.ellipse(ex+e.w/2+ox,eyeY,8,6,0,0,Math.PI*2);ctx.fill();
+        }
+        ctx.shadowBlur=0;
+      }
+      // Red vignette
+      const vg=ctx.createRadialGradient(W/2,H/2,H*.25,W/2,H/2,H*.8);
+      vg.addColorStop(0,'rgba(80,0,0,0)');vg.addColorStop(1,'rgba(120,0,0,.55)');
+      ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
     }
     drawPowerups();drawFireballs();drawPlayer(p1);
     if(gameMode==='2p')drawPlayer(p2);
@@ -2304,6 +2492,9 @@ function loop(){
     ctx.fillStyle='#fff';ctx.font='bold 11px monospace';ctx.textAlign='center';
     ctx.fillText(miniBoss.name+' — DEFEAT IT TO ADVANCE!',W/2,23);
   }
+
+  // Jumpscare overlay (drawn on top of everything, outside shake transform)
+  if(jsActive>0)drawJumpscare();
 
   ctx.restore();
   requestAnimationFrame(loop);
