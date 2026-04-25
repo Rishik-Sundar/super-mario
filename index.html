@@ -496,7 +496,7 @@ const DEFS={
     // Final gauntlet before Bowser
     [91,'goomba'],[93,'koopa'],[95,'goomba'],[97,'koopa'],
   ],
-  bowser:[100],checkpoints:[[55]],axe:[107]},
+  bowser:[100],checkpoints:[[58]],axe:[107]},
 };
 
 // ── BUILD LEVEL ───────────────────────────────────────────────────────────
@@ -584,6 +584,7 @@ function startGame(){
 function loadLevel(name,sx,sy){
   lv=buildLevel(DEFS[name]);
   fireballs=[];powerups=[];particles=[];popups=[];coinAnims=[];
+  cpX=0; // reset checkpoint each level so players spawn at level start if not reached
   timer=DIFF[difficulty].timer;timerTick=0;
   const spx=sx||2*T,spy=sy||GY-50;
   if(!p1.dead){p1.x=spx;p1.y=spy;p1.vx=0;p1.vy=0;p1.pipeTimer=0;p1.jumps=0;}
