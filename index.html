@@ -1000,7 +1000,8 @@ function updEnemies(){
       e.vx*=.96;e.vy+=Math.sin(Date.now()*.002)*.04;e.vy=Math.max(-1.5,Math.min(1.5,e.vy));
       if(Math.abs(e.vx)<.5)e.vx=e.facing||1;
       e.x+=e.vx;e.y+=e.vy;
-      e.x=Math.max(T,Math.min(e.x,lv.LW*T-e.w-T));
+      if(e.x<T){e.x=T;e.vx=Math.abs(e.vx)||1;}
+      else if(e.x+e.w>lv.LW*T-T){e.x=lv.LW*T-T-e.w;e.vx=-Math.abs(e.vx)||-1;}
       e.y=Math.max(T*2,Math.min(e.y,GY-e.h-T*2));
     }else{
       if(Math.abs(e.vx)<.1)e.vx=-1.4;
@@ -1033,7 +1034,8 @@ function updEnemies(){
         }
         if(!floor)e.vx*=-1;
       }
-      e.x=Math.max(T,Math.min(e.x,lv.LW*T-e.w-T));
+      if(e.x<T){e.x=T;e.vx=Math.abs(e.vx)||1;}
+      else if(e.x+e.w>lv.LW*T-T){e.x=lv.LW*T-T-e.w;e.vx=-Math.abs(e.vx)||-1;}
       if(e.y>H+60)e.alive=false;
     }
     e.wt++;if(e.wt>6){e.wf=(e.wf+1)%2;e.wt=0;}
