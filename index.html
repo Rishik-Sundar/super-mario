@@ -1221,11 +1221,11 @@ function updPlayer(p,isP1){
       popup(k.x,k.y,'GOT KEY!','#ffd700');spawnPtcl(k.x+8,k.y+10,'#ffd700',12);shake(3);
     }
   }
-  // Door opening
+  // Door opening — use 6px margin because the door solid pushes player flush against it
   if(p.hasKey){
     for(const d of lv.doors){
       if(d.open)continue;
-      if(p.x+p.w>d.x&&p.x<d.x+d.w&&p.y+p.h>d.y&&p.y<d.y+d.h){
+      if(p.x+p.w+6>d.x&&p.x<d.x+d.w+6&&p.y+p.h>d.y+4&&p.y<d.y+d.h-4){
         d.open=true;p.hasKey=false;
         const si=lv.solids.findIndex(s=>s.ref===d);if(si>=0)lv.solids.splice(si,1);
         popup(d.x+16,d.y,'DOOR OPEN!','#ffd700');spawnPtcl(d.x+16,d.y+d.h/2,'#ffd700',18);shake(5);
