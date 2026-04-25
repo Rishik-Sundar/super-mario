@@ -14,7 +14,13 @@ body{background:#111;display:flex;flex-direction:column;align-items:center;justi
 #ammobar{display:flex;gap:3px;align-items:center}
 canvas{display:block;border:3px solid #444;border-top:none;border-radius:0 0 4px 4px}
 #overlay{display:none;position:absolute;background:rgba(0,0,0,.9);color:#fff;font-size:26px;font-weight:bold;text-align:center;padding:24px 52px;border:4px solid #fff;border-radius:12px;line-height:1.9}
-#hint{color:#333;font-size:10px;margin-top:6px;text-align:center;width:800px;letter-spacing:.5px}
+#hint{color:#555;font-size:10px;margin-top:4px;text-align:center;width:800px;letter-spacing:.5px}
+#featurebar{width:800px;background:#0a0a0a;border:2px solid #333;border-radius:0 0 6px 6px;margin-top:0;padding:5px 10px;display:flex;flex-direction:column;gap:3px}
+#featurebar .frow{display:flex;gap:0;justify-content:center;flex-wrap:wrap;gap:6px}
+#featurebar .ftag{background:#1a1a1a;border:1px solid #333;border-radius:4px;padding:2px 7px;font-size:10px;color:#aaa;font-family:'Courier New',monospace;white-space:nowrap}
+#featurebar .ftag b{color:#ffd700}
+#featurebar .ftag .key{background:#333;border:1px solid #555;border-radius:3px;padding:0 4px;color:#fff;font-size:9px;margin:0 1px}
+#featurebar .fhdr{color:#f5a623;font-size:9px;letter-spacing:2px;text-align:center;font-weight:bold;margin-bottom:1px}
 </style>
 </head>
 <body>
@@ -38,7 +44,33 @@ canvas{display:block;border:3px solid #444;border-top:none;border-radius:0 0 4px
 <input id="codeInput" type="text" maxlength="6" placeholder="e.g. AB3X7K"
   style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,20px);font-size:28px;text-align:center;width:220px;padding:10px;background:#0a0a20;color:#ffd700;border:3px solid #ffd700;border-radius:10px;letter-spacing:6px;text-transform:uppercase;outline:none;z-index:99">
 <div id="overlay"></div>
-<div id="hint">P1: ←→ move · Z/↑ jump (double jump!) · X fire (5 shots, reloads)&nbsp;&nbsp;|&nbsp;&nbsp;P2: A/D move · W jump · Q fire&nbsp;&nbsp;|&nbsp;&nbsp;↓ enter pipe · R restart &nbsp;·&nbsp; Fan project — not affiliated with Nintendo</div>
+<div id="featurebar">
+  <div class="fhdr">— CONTROLS &amp; FEATURES —</div>
+  <div class="frow">
+    <span class="ftag"><span class="key">←→</span> Move P1</span>
+    <span class="ftag"><span class="key">Z</span> or <span class="key">↑</span> Jump <b>(double jump!)</b></span>
+    <span class="ftag"><span class="key">X</span> Fire <b>(5 shots · auto-reload)</b></span>
+    <span class="ftag"><span class="key">↓</span> Enter pipe</span>
+    <span class="ftag"><span class="key">←←</span> or <span class="key">→→</span> <b>Dash</b> (double-tap)</span>
+    <span class="ftag"><span class="key">N</span> Toggle <b>Night Mode</b></span>
+  </div>
+  <div class="frow">
+    <span class="ftag"><span class="key">A/D</span> Move P2</span>
+    <span class="ftag"><span class="key">W</span> Jump P2</span>
+    <span class="ftag"><span class="key">Q</span> Fire P2</span>
+    <span class="ftag"><span class="key">R</span> Restart</span>
+    <span class="ftag"><b>Shop</b> opens between worlds · spend coins on power-ups</span>
+    <span class="ftag"><b>Keys</b> unlock <b>Doors</b> — find the key first!</span>
+  </div>
+  <div class="frow">
+    <span class="ftag"><b>❤ Hearts</b> shown in HUD · lose one per death</span>
+    <span class="ftag"><b>Checkpoints</b> save your spot mid-level</span>
+    <span class="ftag"><b>Mini-Boss</b> blocks path — defeat to progress</span>
+    <span class="ftag"><b>Leaderboard</b> saves your best scores locally</span>
+    <span class="ftag"><b>Screen shake</b> on big hits · animated water hazards</span>
+  </div>
+</div>
+<div id="hint">Fan project — not affiliated with Nintendo</div>
 
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
