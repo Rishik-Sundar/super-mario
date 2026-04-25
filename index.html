@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Super Mario Bros - Multiplayer</title>
+<title>Nova Bros</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -19,7 +19,7 @@ canvas{display:block;border:3px solid #444;border-top:none;border-radius:0 0 4px
 </head>
 <body>
 <div id="hud">
-  <div class="col"><div class="lbl">MARIO</div><div id="hScore">000000</div></div>
+  <div class="col"><div class="lbl">ZANE</div><div id="hScore">000000</div></div>
   <div class="col"><div class="lbl">POWER</div><div id="hPower">SMALL</div></div>
   <div class="col"><div class="lbl">AMMO P1</div><div id="hAmmo">●●●●●</div></div>
   <div class="col"><div class="lbl">COINS</div><div id="hCoins">×00</div></div>
@@ -28,7 +28,7 @@ canvas{display:block;border:3px solid #444;border-top:none;border-radius:0 0 4px
   <div class="col"><div class="lbl">LIVES</div><div id="hLives">×3</div></div>
 </div>
 <div id="hud2">
-  <span>P2 LUIGI: <b id="h2Score">000000</b></span>
+  <span>P2 RIKO: <b id="h2Score">000000</b></span>
   <span>POWER: <b id="h2Power">SMALL</b></span>
   <span>AMMO: <b id="h2Ammo">●●●●●</b></span>
   <span>COINS: <b id="h2Coins">×00</b></span>
@@ -38,7 +38,7 @@ canvas{display:block;border:3px solid #444;border-top:none;border-radius:0 0 4px
 <input id="codeInput" type="text" maxlength="6" placeholder="e.g. AB3X7K"
   style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,20px);font-size:28px;text-align:center;width:220px;padding:10px;background:#0a0a20;color:#ffd700;border:3px solid #ffd700;border-radius:10px;letter-spacing:6px;text-transform:uppercase;outline:none;z-index:99">
 <div id="overlay"></div>
-<div id="hint">P1: ←→ move · Z/↑ jump (double jump!) · X fire (5 shots, reloads)&nbsp;&nbsp;|&nbsp;&nbsp;P2: A/D move · W jump · Q fire&nbsp;&nbsp;|&nbsp;&nbsp;↓ enter pipe · R restart</div>
+<div id="hint">P1: ←→ move · Z/↑ jump (double jump!) · X fire (5 shots, reloads)&nbsp;&nbsp;|&nbsp;&nbsp;P2: A/D move · W jump · Q fire&nbsp;&nbsp;|&nbsp;&nbsp;↓ enter pipe · R restart &nbsp;·&nbsp; Fan project — not affiliated with Nintendo</div>
 
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
@@ -758,7 +758,7 @@ function updPlayer(p,isP1){
       ax.active=false;
       for(const e of lv.enemies)if(e.type==='bowser'){e.alive=false;spawnPtcl(e.x+28,e.y+32,'#f44',25);}
       p.score+=5000;hud();
-      setTimeout(()=>{state='win';showOv('BOWSER DEFEATED!','#ffd700',`Total Score: ${p1.score+p2.score} — Press R`);},800);
+      setTimeout(()=>{state='win';showOv('DRAKUS DEFEATED!','#ffd700',`Total Score: ${p1.score+p2.score} — Press R`);},800);
     }
   }
 
@@ -920,7 +920,7 @@ function updFireballs(){
           if(e.type==='bowser'){
             e.hp--;fb.alive=false;spawnPtcl(e.x+28,e.y+20,'#f80',8);
             popup(e.x+28,e.y,'HP:'+e.hp,'#f80');
-            if(e.hp<=0){e.alive=false;spawnPtcl(e.x+28,e.y+32,'#f44',25);const sc=fb.owner===1?p1:p2;sc.score+=8000;hud();state='win';showOv('BOWSER DEFEATED!','#ffd700',`Score: ${p1.score+p2.score} — Press R`);}
+            if(e.hp<=0){e.alive=false;spawnPtcl(e.x+28,e.y+32,'#f44',25);const sc=fb.owner===1?p1:p2;sc.score+=8000;hud();state='win';showOv('DRAKUS DEFEATED!','#ffd700',`Score: ${p1.score+p2.score} — Press R`);}
           }else{
             e.alive=false;fb.alive=false;spawnPtcl(e.x+14,e.y+10,'#f80',7);
             const sc=fb.owner===1?p1:p2;sc.score+=300;hud();popup(e.x+14,e.y,'+300','#fa0');
@@ -1473,7 +1473,7 @@ function drawBowser(e){
   ctx.fillStyle=hpG;ctx.beginPath();ctx.roundRect(bx,by,hpW,bh,[3]);ctx.fill();
   ctx.fillStyle='rgba(255,100,100,.4)';ctx.fillRect(bx,by,hpW,4);
   ctx.fillStyle='#fff';ctx.font='bold 8px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(`BOWSER  ${e.hp}/${e.maxHp}`,bx+bw/2,by+bh/2);
+  ctx.fillText(`DRAKUS  ${e.hp}/${e.maxHp}`,bx+bw/2,by+bh/2);
 }
 
 function drawPlayer(p){
@@ -1589,10 +1589,10 @@ function drawTitle(){
   // Title
   ctx.shadowColor='#ffd700';ctx.shadowBlur=36;
   ctx.fillStyle='#ffd700';ctx.textAlign='center';ctx.font='bold 54px Arial';
-  ctx.fillText('SUPER MARIO',W/2,68);
+  ctx.fillText('NOVA BROS',W/2,68);
   ctx.shadowColor='#fff';ctx.shadowBlur=10;
   ctx.fillStyle='#fff';ctx.font='bold 26px Arial';
-  ctx.fillText('MULTIPLAYER BROS',W/2,104);
+  ctx.fillText('PIXEL ADVENTURE',W/2,104);
   ctx.shadowBlur=0;
 
   // Gold divider
@@ -1602,8 +1602,8 @@ function drawTitle(){
   ctx.save();ctx.translate(0,122);dv();
   ctx.fillStyle='#ffd700';ctx.font='bold 13px monospace';ctx.fillText('CONTROLS',W/2,16);
   ctx.font='11px monospace';
-  ctx.fillStyle='#ff8a80';ctx.fillText('P1 MARIO:  Arrow Keys to move   Up / Z to jump   X to fire   Down to enter pipe',W/2,34);
-  ctx.fillStyle='#69db7c';ctx.fillText('P2 LUIGI:  A / D to move   W to jump   Q to fire   S to enter pipe',W/2,50);
+  ctx.fillStyle='#ff8a80';ctx.fillText('P1 ZANE:  Arrow Keys to move   Up / Z to jump   X to fire   Down to enter pipe',W/2,34);
+  ctx.fillStyle='#69db7c';ctx.fillText('P2 RIKO:  A / D to move   W to jump   Q to fire   S to enter pipe',W/2,50);
   ctx.fillStyle='#aaa';ctx.fillText('Both players can DOUBLE JUMP — press jump again while in the air!',W/2,66);
   ctx.restore();
 
@@ -1612,9 +1612,9 @@ function drawTitle(){
   ctx.fillStyle='#ffd700';ctx.font='bold 13px monospace';ctx.fillText('HOW TO PLAY',W/2,16);
   ctx.font='11px monospace';
   const tips=[
-    ['#fff','Jump ON top of Goombas / Koopas to stomp them!  Kick shells into other enemies!'],
+    ['#fff','Jump ON top of Grubs / Crunches to stomp them!  Kick shells into other enemies!'],
     ['#fff','Hit the yellow ? blocks from BELOW to get powerups'],
-    ['#fa0','Mushroom — Makes you BIG! Big Mario can smash brick blocks'],
+    ['#fa0','Mushroom — Makes you BIG! Big Zane/Riko can smash brick blocks'],
     ['#ff6b35','Fire Flower — Gives you 5 fireballs that auto-reload every 3 sec (press X / Q)'],
     ['#4cf','Reach the FLAG pole at the end of each world to advance to the next'],
     ['#ff0','Enter green pipes by pressing Down on top of them to find hidden rooms!'],
@@ -1626,16 +1626,17 @@ function drawTitle(){
   // Boss
   ctx.save();ctx.translate(0,314);dv();
   ctx.shadowColor='#f44';ctx.shadowBlur=14;
-  ctx.fillStyle='#ff5252';ctx.font='bold 13px monospace';ctx.fillText('BOSS: BOWSER  (World 3-1 — The Castle)',W/2,16);
+  ctx.fillStyle='#ff5252';ctx.font='bold 13px monospace';ctx.fillText('BOSS: DRAKUS  (World 3-1 — The Castle)',W/2,16);
   ctx.shadowBlur=0;ctx.font='11px monospace';
   const btips=[
-    ['#ffaa44','Path: Complete World 1-1 (flag)  then World 2-1 (flag)  then face BOWSER in 3-1'],
-    ['#ff8888','Touch the GOLDEN AXE past Bowser to defeat him instantly!'],
+    ['#ffaa44','Path: Complete World 1-1 (flag)  then World 2-1 (flag)  then face DRAKUS in 3-1'],
+    ['#ff8888','Touch the GOLDEN AXE past Drakus to defeat him instantly!'],
     ['#ff8888','OR shoot him 10 times with fireballs — but he fires back!'],
     ['#aff','Dodge his fireballs — jump over them or get a Fire Flower and shoot back!'],
   ];
   ty=34;
   for(const[col,text]of btips){ctx.fillStyle=col;ctx.fillText(text,W/2,ty);ty+=16;}
+  ctx.fillStyle='#444';ctx.font='10px monospace';ctx.fillText('Fan project — not affiliated with Nintendo',W/2,ty+6);
   ctx.restore();
 
   // Difficulty buttons
