@@ -305,7 +305,7 @@ const DEFS={
     [93,7,5,true],
   ],
   pipes:[
-    {tx:10,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:31,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
   ],
@@ -395,7 +395,7 @@ const DEFS={
     [113,7,5,true],
   ],
   pipes:[
-    {tx:7,h:2,dest:'2-2',spawn:[3*T,GY-50]},
+    {tx:25,h:2,dest:'2-2',spawn:[3*T,GY-50]},
     {tx:52,h:2,dest:'2-2',spawn:[3*T,GY-50]},
     {tx:98,h:2,dest:'2-2',spawn:[3*T,GY-50]},
   ],
@@ -619,7 +619,7 @@ function updPlayer(p,isP1){
       if(p.lives<=0){
         p.outOfLives=true;
         if(p1.outOfLives&&p2.outOfLives){state='gameover';showOv('GAME OVER','#f55','Press R to restart');}
-      }else{p.x=cpX||2*T;p.y=GY-50;p.vx=0;p.vy=0;p.dead=false;p.invincible=120;p.jumps=0;}
+      }else{p.x=cpX||2*T;p.y=GY-50;p.vx=0;p.vy=0;p.dead=false;p.invincible=300;p.jumps=0;}
     }
     // Revive check: other player presses E (P1 revives P2) or I (P2 revives P1)
     if(p.outOfLives){
