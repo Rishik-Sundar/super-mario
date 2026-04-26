@@ -591,19 +591,14 @@ function applyHostState(d){
     return;
   }
   Object.assign(p1,d.p1);
-  // Smooth correction for P2 — guest runs local prediction, host corrects drift
-  const hx=d.p2.x,hy=d.p2.y;
-  const dist=Math.hypot(hx-p2.x,hy-p2.y);
-  if(dist>3*32||d.p2.dead!==p2.dead||d.p2.outOfLives!==p2.outOfLives){
-    Object.assign(p2,d.p2); // hard snap for big discrepancy or life-state change
+  // Guest runs local physics for P2 — only sync game-state events, never position/velocity
+  // (syncing host position cancels local jumps since host state is always delayed by ping)
+  if(d.p2.dead!==p2.dead||d.p2.outOfLives!==p2.outOfLives){
+    Object.assign(p2,d.p2); // hard snap only on life-state change (death, revival)
   }else{
-    // Nudge local position toward authoritative host position (don't override velocity — breaks local jump)
-    p2.x+=(hx-p2.x)*.3;p2.y+=(hy-p2.y)*.3;
-    // Apply game-state fields from host (not position or velocity)
     p2.power=d.p2.power;p2.coins=d.p2.coins;p2.score=d.p2.score;
-    p2.lives=d.p2.lives;p2.dead=d.p2.dead;p2.outOfLives=d.p2.outOfLives;
-    p2.invincible=d.p2.invincible;p2.ammo=d.p2.ammo;p2.h=d.p2.h;
-    p2.facing=d.p2.facing;p2.wf=d.p2.wf;
+    p2.lives=d.p2.lives;p2.invincible=Math.max(p2.invincible,d.p2.invincible);
+    p2.ammo=d.p2.ammo;p2.h=d.p2.h;
   }
   for(let i=0;i<d.enemies.length&&i<lv.enemies.length;i++)Object.assign(lv.enemies[i],d.enemies[i]);
   fireballs=d.fireballs.map(f=>Object.assign({bounces:99},f));
