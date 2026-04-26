@@ -160,6 +160,8 @@ let p1,p2;
 let gameMode='2p'; // '1p' or '2p'
 let cam1X=0,cam2X=0;
 let nightMode=false; // N key toggles
+let returnSpawn=null; // where to spawn when exiting a sub-level pipe
+let returnWorld=null; // which level to return to when exiting a sub-level
 let shakeX=0,shakeY=0;
 function shake(amt=6){shakeX=(Math.random()-.5)*amt*2;shakeY=(Math.random()-.5)*amt*2;}
 let stats={kills:0,deaths:0,startTime:0,fireballs:0};
@@ -947,7 +949,35 @@ const DEFS={
     // Final gauntlet before Bowser
     [91,'goomba'],[93,'koopa'],[95,'goomba'],[97,'koopa'],
   ],
+  pipes:[
+    {tx:8,h:2,dest:'3-2',spawn:[3*T,GY-50]},
+    {tx:45,h:2,dest:'3-2',spawn:[3*T,GY-50]},
+    {tx:80,h:2,dest:'3-2',spawn:[3*T,GY-50]},
+  ],
   bowser:[100],checkpoints:[[58]],axe:[107]},
+
+// ── 3-2: Castle Dungeon ───────────────────────────────────────────────────
+'3-2':{LW:55,name:'3-2',bg:'underground',ceiling:true,gtype:'stone',
+  bricks:[
+    [3,9],[4,9],[5,9],[6,9],[7,9],
+    [10,9],[11,9],[12,9],[13,9],[14,9],
+    [17,9],[18,9],[19,9],[20,9],[21,9],
+    [24,9],[25,9],[26,9],[27,9],[28,9],
+    [31,9],[32,9],[33,9],[34,9],[35,9],
+    [38,9],[39,9],[40,9],[41,9],[42,9],
+    [45,9],[46,9],[47,9],[48,9],[49,9],
+    [52,9],[53,9],[54,9],
+  ],
+  qdata:[
+    [7,6,8,true],[14,6,5,true],[21,6,8,true],[28,6,5,true],[35,6,8,true],[49,6,5,true],
+  ],
+  pipes:[{tx:2,h:2,exit:true,dest:'3-1',spawn:[3*T,GY-50]}],
+  enemies:[
+    [6,'koopa'],[9,'goomba'],[12,'koopa'],[16,'goomba'],[19,'koopa'],
+    [23,'goomba'],[26,'koopa'],[30,'goomba'],[33,'koopa'],[37,'goomba'],
+    [40,'koopa'],[44,'goomba'],[47,'koopa'],[51,'goomba'],[54,'koopa'],
+  ],
+  checkpoints:[[27]]},
 };
 
 // ── BUILD LEVEL ───────────────────────────────────────────────────────────
@@ -1006,7 +1036,7 @@ function buildLevel(def){
     const bx=def.bowser[0]*T;
     enemies.push({x:bx,y:GY-64,w:56,h:64,vx:-1.5,vy:0,onGround:false,
       alive:true,squished:false,squishTimer:0,wf:0,wt:0,
-      type:'bowser',hp:10,maxHp:10,fireCD:0,phaseTimer:120,phase:0,_bnc:false});
+      type:'bowser',hp:16,maxHp:16,fireCD:0,phaseTimer:100,phase:0,_bnc:false});
   }
   for(const[cx]of(def.checkpoints||[]))
     checkpoints.push({x:cx*T,y:GY-T*6,reached:false});
@@ -1139,11 +1169,16 @@ function updPlayer(p,isP1){
   // Pipe
   if(down&&p.onGround&&p.pipeTimer===0){
     for(const pipe of lv.pipes){
-      if(pipe.dest&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
+      if(pipe.dest&&!pipe.exit&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
+        returnSpawn=[pipe.x+T,GY-50]; // remember where to return near this pipe
+        returnWorld=lv.name;
         p.pipeTimer=60;setTimeout(()=>loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50])),500);return;
       }
       if(pipe.exit&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
-        p.pipeTimer=60;const prev=WORLDS[Math.max(0,worldIdx-1)];setTimeout(()=>loadLevel(prev||'1-1',...(pipe.spawn||[14*T,GY-50])),500);return;
+        const rs=returnSpawn||pipe.spawn||[14*T,GY-50];
+        const prev=returnWorld||WORLDS[Math.max(0,worldIdx-1)];
+        returnSpawn=null;returnWorld=null;
+        p.pipeTimer=60;setTimeout(()=>loadLevel(prev||'1-1',...rs),500);return;
       }
     }
   }
@@ -1414,15 +1449,28 @@ function updBowser(e,players){
   e.phaseTimer--;
   if(e.onGround&&e.phaseTimer<=0){
     e.phase=(e.phase+1)%3;
-    e.phaseTimer=e.phase===0?140:e.phase===1?75:190;
-    if(e.phase===1)e.vy=-14;
+    e.phaseTimer=e.phase===0?100:e.phase===1?55:130;
+    if(e.phase===1)e.vy=-17;
   }
+  const hpPct=e.hp/e.maxHp;
+  const rage=hpPct<.5?1.6:1; // goes faster and shoots more below 50% hp
   if(e.phase===2){
     e.fireCD--;
-    if(e.fireCD<=0){e.fireCD=38;fireballs.push({x:e.x,y:e.y+e.h*.4,vx:-6,vy:0,alive:true,bounces:12,owner:-1,r:10,isBoss:true});}
+    if(e.fireCD<=0){
+      e.fireCD=Math.floor(22*rage); // fires faster at low hp
+      // Shoot at target player
+      const tgt=players.reduce((a,b)=>(!a||Math.abs(b.x-e.x)<Math.abs(a.x-e.x)?b:a),null);
+      const dx=tgt?tgt.x-(e.x+e.w/2):(-1);const dy=tgt?tgt.y-(e.y+e.h/2):0;
+      const dist=Math.sqrt(dx*dx+dy*dy)||1;
+      const spd=7;
+      fireballs.push({x:e.x,y:e.y+e.h*.4,vx:(dx/dist)*spd,vy:(dy/dist)*spd*.5,alive:true,bounces:12,owner:-1,r:10,isBoss:true});
+      // At low hp, shoots a 2nd fireball in opposite direction
+      if(hpPct<.4)fireballs.push({x:e.x+e.w,y:e.y+e.h*.4,vx:5,vy:-3,alive:true,bounces:8,owner:-1,r:10,isBoss:true});
+    }
   }
   const target=players[0];
-  if(target&&e.phase!==1)e.vx=(target.x>e.x?1:-1)*2;
+  const bowserSpd=2.8*rage;
+  if(target&&e.phase!==1)e.vx=(target.x>e.x?1:-1)*bowserSpd;
   e.vy+=GR;moveX(e,lv.solids);e.onGround=false;moveY(e,lv.solids);
   const minX=88*T;
   if(e.x<minX){e.x=minX;e.vx=Math.abs(e.vx);}
@@ -1843,8 +1891,21 @@ function drawBG(){
       drawCloud(ox,oy,sc);
     }
   }
+  // Universal night mode overlay — works on any bg except already-night levels
+  if(nightMode&&!lv.night&&!isNightmare()){
+    ctx.fillStyle='rgba(0,0,20,.62)';ctx.fillRect(0,0,W,H);
+    // Moon overlay
+    const mx=W-110-camX*.04,my=58;
+    ctx.fillStyle='#e8e8d0';ctx.shadowColor='#aaaaff';ctx.shadowBlur=24;
+    ctx.beginPath();ctx.arc(mx,my,26,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#b0b098';ctx.beginPath();ctx.arc(mx+7,my-4,18,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    // Stars
+    ctx.fillStyle='#fff';
+    for(let i=0;i<55;i++){const sx=(i*137+71)%W,sy=(i*97+43)%(H*.55);ctx.globalAlpha=.3+Math.abs(Math.sin(tick*.07+i))*.5;ctx.beginPath();ctx.arc(sx,sy,.7+i%3*.4,0,Math.PI*2);ctx.fill();}
+    ctx.globalAlpha=1;
+  }
 }
-
 function drawCloud(cx,cy,s){
   const r=24*s;
   ctx.fillStyle='rgba(255,255,255,.95)';
@@ -2901,7 +2962,7 @@ function loop(){
 
   // Revive prompts (full canvas)
   const pulse=.7+Math.sin(tick*.12)*.3;
-  if(p2.outOfLives&&!p1.outOfLives){
+  if(gameMode!=='1p'&&p2.outOfLives&&!p1.outOfLives){
     const canR=p1.coins>=15;
     ctx.globalAlpha=pulse;
     ctx.fillStyle=canR?'#00ff88':'#ff4444';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=14;
@@ -2909,7 +2970,7 @@ function loop(){
     ctx.fillText(canR?'Press E — Revive P2 (15 coins)':'P2 is OUT! P1 needs 15 coins to revive',W/2,H-18);
     ctx.shadowBlur=0;ctx.globalAlpha=1;
   }
-  if(p1.outOfLives&&!p2.outOfLives){
+  if(gameMode!=='1p'&&p1.outOfLives&&!p2.outOfLives){
     const canR=p2.coins>=15;
     ctx.globalAlpha=pulse;
     ctx.fillStyle=canR?'#00ff88':'#ff4444';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=14;
