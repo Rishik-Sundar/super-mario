@@ -1274,7 +1274,16 @@ function updPlayer(p,isP1){
       if(!e.alive||e.squished)continue;
       if(e.type==='piranha'){if(e.phase===2&&overlap(p,e,2,2))hitPlayer(p);continue;}
       if(!overlap(p,e))continue;
-      if(e.type==='bowser'){hitPlayer(p);continue;}
+      if(e.type==='bowser'){
+        const stomp=p.vy>0&&p.y+p.h<e.y+e.h*.45;
+        if(stomp){
+          e.hp--;p.vy=-13;shake(8);spawnPtcl(e.x+28,e.y,'#f44',10);
+          popup(e.x+28,e.y,e.hp>0?'HP:'+e.hp:'DOWN!','#f44');
+          if(e.hp<=0){e.alive=false;spawnPtcl(e.x+28,e.y+32,'#f44',25);p.score+=8000;hud();saveScore();
+            setTimeout(()=>{state='win';showOv('DRAKUS DEFEATED!','#ffd700',`Score: ${p1.score+p2.score}<br>${statsOverlay()}<br>Press R`);},600);}
+        }else{hitPlayer(p);}
+        continue;
+      }
       const stomp=p.vy>0&&p.y+p.h<e.y+e.h*.6;
       if(stomp){
         if(e.type==='miniboss'){
