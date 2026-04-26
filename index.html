@@ -103,10 +103,35 @@ document.addEventListener('keydown',e=>{
   if(state==='charselect'){
     const ci=Number(e.key)-1;
     if(ci>=0&&ci<CHARS.length){
-      if(charSelectStep===0){p1Char=CHARS[ci];if(gameMode==='1p'){startGame();}else{charSelectStep=1;}}
-      else{p2Char=CHARS[ci];startGame();}
+      if(charSelectStep===0){
+        // P1/host picking
+        if(netRole==='host'){
+          if(ci===netLockedCharIdx)return; // already taken (shouldn't happen at step 0)
+          p1Char=CHARS[ci];
+          conn.send({type:'hostChar',charIdx:ci});
+          charSelectStep=1; // now waiting for guest
+        } else {
+          p1Char=CHARS[ci];
+          if(gameMode==='1p'){startGame();}else{charSelectStep=1;}
+        }
+      } else {
+        // P2/guest picking
+        if(ci===netLockedCharIdx){popup(W/2,H/2,'Already taken!','#f55');return;}
+        p2Char=CHARS[ci];
+        if(netRole==='guest'){
+          conn.send({type:'charReady',charIdx:ci});
+          startGame();
+        } else {
+          startGame();
+        }
+      }
     }
-    if(e.code==='Escape'){state='modeselect';charSelectStep=0;return;}
+    if(e.code==='Escape'){
+      netLockedCharIdx=-1;
+      if(netRole==='host'||netRole==='guest'){if(peer)peer.destroy();peer=null;conn=null;netRole=null;state='online';}
+      else{state='modeselect';}
+      charSelectStep=0;return;
+    }
     return;
   }
   if(state==='online'){
@@ -134,8 +159,8 @@ document.addEventListener('keydown',e=>{
     if(e.code==='Enter'||e.code==='Space'){loadLevel(WORLDS[worldIdx]);}
     return;
   }
-  // Track guest jump (single-frame signal)
-  if(netRole==='guest'&&e.code==='KeyW')guestJumped=true;
+  // Track guest jump (single-frame signal) — guest can use WASD or arrow keys
+  if(netRole==='guest'&&(e.code==='KeyW'||e.code==='ArrowUp'||e.code==='KeyZ'))guestJumped=true;
   if(!K[e.code])KP[e.code]=true;
   if(state==='play'&&!K[e.code]){
     const nt=performance.now();
@@ -437,6 +462,7 @@ const CHARS=[
 ];
 let p1Char=CHARS[0],p2Char=CHARS[1];
 let charSelectStep=0; // 0=P1 picking, 1=P2 picking (2P only)
+let netLockedCharIdx=-1; // char index locked by other player in online mode
 const MINIBOSSES=[
   {name:'MEGA GRUB', color:'#c0834a', hp:5, w:56, h:56, speed:2.2, reward:500, desc:'A giant Grub blocks your path!'},
   {name:'SHELL KING', color:'#3d9e40', hp:8, w:52, h:52, speed:2.8, reward:800, desc:'The Shell King guards the gate!'},
@@ -482,15 +508,22 @@ function hostGame(){
       conn=c;
       c.on('open',()=>{
         netRole='host';gameMode='2p';
-        startGame();
+        netLockedCharIdx=-1;charSelectStep=0;
+        state='charselect'; // host picks char first
+        netStatus='';
       });
       c.on('data',d=>{
         if(d.type==='input'){
           guestInput={...d};
           if(d.jump)guestInput.jump=true; // latch until consumed
         }
+        if(d.type==='charReady'){
+          p2Char=CHARS[d.charIdx];
+          netLockedCharIdx=-1;
+          startGame();
+        }
       });
-      c.on('close',()=>{netStatus='Partner disconnected';state='online';netRole=null;conn=null;});
+      c.on('close',()=>{netStatus='Partner disconnected';state='online';netRole=null;conn=null;netLockedCharIdx=-1;});
     });
   }catch(e){netStatus='PeerJS failed — check your internet';}
 }
@@ -506,15 +539,21 @@ function joinGame(code){
       conn=peer.connect(code.toUpperCase(),{reliable:true});
       conn.on('open',()=>{
         netRole='guest';gameMode='2p';
-        netStatus='Connected! Starting…';
+        netStatus='Connected! Waiting for host to pick character…';
         codeInput.style.display='none';
-        // Guest starts game visually — host sends real state
-        startGame();
       });
       conn.on('data',d=>{
         if(d.type==='state')applyHostState(d);
+        if(d.type==='hostChar'){
+          // Host picked — now guest picks (can't pick same)
+          p1Char=CHARS[d.charIdx];
+          netLockedCharIdx=d.charIdx;
+          charSelectStep=1;
+          state='charselect';
+          netStatus='';
+        }
       });
-      conn.on('close',()=>{netStatus='Host disconnected';state='online';netRole=null;conn=null;});
+      conn.on('close',()=>{netStatus='Host disconnected';state='online';netRole=null;conn=null;netLockedCharIdx=-1;});
     });
   }catch(e){netStatus='PeerJS failed — check your internet';}
 }
@@ -540,7 +579,11 @@ function sendState(){
 }
 
 function applyHostState(d){
-  if(d.lvName&&lv&&d.lvName!==lv.name){loadLevel(d.lvName);return;}
+  if(d.lvName&&lv&&d.lvName!==lv.name){
+    loadLevel(d.lvName);
+    p1.invincible=90;if(!p2.dead)p2.invincible=90;
+    return;
+  }
   Object.assign(p1,d.p1);
   Object.assign(p2,d.p2);
   for(let i=0;i<d.enemies.length&&i<lv.enemies.length;i++)Object.assign(lv.enemies[i],d.enemies[i]);
@@ -555,7 +598,7 @@ function applyHostState(d){
 
 function sendGuestInput(){
   if(!conn||!conn.open)return;
-  conn.send({type:'input',left:K.KeyA,right:K.KeyD,jump:guestJumped,down:K.KeyS,fire:K.KeyQ});
+  conn.send({type:'input',left:K.KeyA||K.ArrowLeft,right:K.KeyD||K.ArrowRight,jump:guestJumped,down:K.KeyS||K.ArrowDown,fire:(K.KeyQ||K.KeyX)&&!p2.dead});
   guestJumped=false;
 }
 
@@ -2793,26 +2836,59 @@ function drawCharSelect(){
   ctx.fillStyle=sk;ctx.fillRect(0,0,W,H);
   for(let i=0;i<30;i++){const x=(i*137+71)%W,y=(i*97+43)%(H*.5);ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.arc(x,y,1,0,Math.PI*2);ctx.fill();}
   ctx.textAlign='center';
-  const picking=charSelectStep===0?'P1 ZANE — PICK YOUR CHARACTER':'P2 RIKO — PICK YOUR CHARACTER';
-  const pcol=charSelectStep===0?'#ff8a80':'#69db7c';
-  ctx.shadowColor=pcol;ctx.shadowBlur=20;ctx.fillStyle=pcol;ctx.font='bold 28px Arial';
-  ctx.fillText(picking,W/2,55);ctx.shadowBlur=0;
-  ctx.fillStyle='#aaa';ctx.font='13px monospace';
-  ctx.fillText(charSelectStep===1?'P1 chose '+p1Char.name+' — now P2 pick:':'Press 1-4 to choose',W/2,80);
+
+  // Waiting state: host already picked, waiting for guest
+  if(netRole==='host'&&charSelectStep===1){
+    ctx.shadowColor='#69db7c';ctx.shadowBlur=20;ctx.fillStyle='#69db7c';ctx.font='bold 26px Arial';
+    ctx.fillText('WAITING FOR GUEST TO PICK…',W/2,55);ctx.shadowBlur=0;
+    ctx.fillStyle='#aaa';ctx.font='13px monospace';
+    ctx.fillText('You chose: '+p1Char.name,W/2,85);
+    const pulse=.6+Math.sin(tick*.08)*.4;
+    ctx.globalAlpha=pulse;
+    ctx.fillStyle=p1Char.color;ctx.font='bold 80px Arial';ctx.fillText(p1Char.icon,W/2,200);
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#555';ctx.font='12px monospace';ctx.fillText('Esc — cancel',W/2,H-16);
+    return;
+  }
+
+  // Waiting state: guest connected but host hasn't picked yet
+  if(netRole==='guest'&&charSelectStep===0){
+    ctx.fillStyle='#aaa';ctx.font='bold 22px Arial';
+    ctx.fillText('Waiting for host to pick a character…',W/2,H/2);
+    const dots='.'.repeat((Math.floor(tick/20)%4));
+    ctx.fillStyle='#666';ctx.font='16px monospace';ctx.fillText(dots,W/2,H/2+30);
+    return;
+  }
+
+  const isOnlinePick=(netRole==='host'&&charSelectStep===0)||(netRole==='guest'&&charSelectStep===1);
+  let pickLabel,pickCol,subLabel;
+  if(netRole==='host'&&charSelectStep===0){pickLabel='HOST — PICK YOUR CHARACTER';pickCol='#ff8a80';subLabel='Guest is waiting…';}
+  else if(netRole==='guest'&&charSelectStep===1){pickLabel='GUEST — PICK YOUR CHARACTER';pickCol='#69db7c';subLabel='Host picked '+p1Char.name+' — choose a different one!';}
+  else if(charSelectStep===0){pickLabel='P1 — PICK YOUR CHARACTER';pickCol='#ff8a80';subLabel='Press 1-4 to choose';}
+  else{pickLabel='P2 — PICK YOUR CHARACTER';pickCol='#69db7c';subLabel='P1 chose '+p1Char.name+' — now P2 pick:';}
+
+  ctx.shadowColor=pickCol;ctx.shadowBlur=20;ctx.fillStyle=pickCol;ctx.font='bold 26px Arial';
+  ctx.fillText(pickLabel,W/2,55);ctx.shadowBlur=0;
+  ctx.fillStyle='#aaa';ctx.font='13px monospace';ctx.fillText(subLabel,W/2,80);
+
   let cx=W/2-370;
   for(let i=0;i<CHARS.length;i++){
     const ch=CHARS[i],bw=170;
-    const isP1Pick=charSelectStep===1&&p1Char===ch;
-    ctx.fillStyle=ch.color+'33';ctx.strokeStyle=isP1Pick?'#fff':ch.color;ctx.lineWidth=isP1Pick?3:2;
+    const isLocked=i===netLockedCharIdx;   // taken by other player online
+    const isAlreadyPicked=charSelectStep===1&&p1Char===ch&&netRole!=='guest'; // local P1 pick shown
+    ctx.globalAlpha=isLocked?.3:1;
+    ctx.fillStyle=ch.color+'33';ctx.strokeStyle=isLocked?'#555':isAlreadyPicked?'#fff':ch.color;ctx.lineWidth=isAlreadyPicked?3:2;
     ctx.beginPath();ctx.roundRect(cx,100,bw,200,14);ctx.fill();ctx.stroke();
-    ctx.fillStyle=ch.color;ctx.shadowColor=ch.color;ctx.shadowBlur=14;
+    ctx.fillStyle=isLocked?'#555':ch.color;ctx.shadowColor=isLocked?'transparent':ch.color;ctx.shadowBlur=isLocked?0:14;
     ctx.font='bold 64px Arial';ctx.textAlign='center';ctx.fillText(ch.icon,cx+bw/2,175);
     ctx.shadowBlur=0;
-    ctx.fillStyle='#fff';ctx.font='bold 18px Arial';ctx.fillText(ch.name,cx+bw/2,205);
-    ctx.fillStyle='#bbb';ctx.font='11px monospace';ctx.fillText(ch.desc,cx+bw/2,222);
+    ctx.fillStyle=isLocked?'#555':'#fff';ctx.font='bold 18px Arial';ctx.fillText(ch.name,cx+bw/2,205);
+    ctx.fillStyle=isLocked?'#444':'#bbb';ctx.font='11px monospace';ctx.fillText(isLocked?'TAKEN':ch.desc,cx+bw/2,222);
     ctx.fillStyle='#888';ctx.font='10px monospace';
     ctx.fillText('SPD:'+ch.spd+' JMP:'+Math.abs(ch.jump)+' AIR:'+ch.jumps,cx+bw/2,240);
-    ctx.fillStyle=ch.color;ctx.font='bold 16px monospace';ctx.fillText('Press '+(i+1),cx+bw/2,278);
+    ctx.fillStyle=isLocked?'#444':ch.color;ctx.font='bold 16px monospace';
+    ctx.fillText(isLocked?'LOCKED':'Press '+(i+1),cx+bw/2,278);
+    ctx.globalAlpha=1;
     cx+=bw+10;
   }
   ctx.globalAlpha=.6+Math.sin(tick*.1)*.4;
