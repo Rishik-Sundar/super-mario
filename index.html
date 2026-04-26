@@ -668,7 +668,11 @@ const DEFS={
     {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:50,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
-    {tx:133,h:3,dest:'_blue_end',blue:true},
+    {tx:91,h:3,dest:'_blue_end',blue:true},
+  ],
+  ghostbricks:[
+    [89,10],[89,11],[89,12],
+    [90,10],[90,11],[90,12],
   ],
   enemies:[
     // Cluster 1 — mix of ground and platform enemies so you can't just run past
@@ -1078,8 +1082,9 @@ function buildLevel(def){
     solids.push({x:dx*T,y:dy*T,w:T,h:dh*T,type:'door',ref:dobj});
   }
 
+  const ghostbricks=(def.ghostbricks||[]).map(([x,y])=>({x:x*T,y:y*T,w:T,h:T,type:def.gtype||'ground'}));
   return{
-    solids,enemies,coinObjs,qblocks,pipes,checkpoints,keys,doors,
+    solids,enemies,coinObjs,qblocks,pipes,checkpoints,keys,doors,ghostbricks,
     flag:def.flag?{x:def.flag[0]*T,y:GY-T*9}:null,
     axe:def.axe?{x:def.axe[0]*T,y:GY-T,w:T,h:T,active:true}:null,
     LW,name:def.name,bg:def.bg||'day',night:def.night||false
@@ -1207,7 +1212,7 @@ function updPlayer(p,isP1){
         if(pipe.secret)unlockAchievement('explorer');
         returnSpawn=[pipe.x+T,GY-50]; // remember where to return near this pipe
         returnWorld=lv.name;
-        p.pipeTimer=60;setTimeout(()=>loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50])),500);return;
+        p.pipeTimer=60;setTimeout(()=>{loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50]));p1.invincible=120;if(!p2.dead)p2.invincible=120;},500);return;
       }
       if(pipe.exit&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
         const rs=returnSpawn||pipe.spawn||[14*T,GY-50];
@@ -2098,6 +2103,7 @@ function drawSolids(){
     if(s.type==='qblock')drawQBlock(sx,s.y,s.ref);
     else if(s.type!=='pipe')drawTile(sx,s.y,s.type);
   }
+  for(const g of(lv.ghostbricks||[]))drawTile(g.x-camX,g.y,g.type);
   for(const p of lv.pipes)drawPipe(p);
 }
 
