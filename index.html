@@ -580,7 +580,7 @@ function sendState(){
     powerups:powerups.map(p=>({x:p.x,y:p.y,alive:p.alive,type:p.type})),
     qblocks:lv.qblocks.map(q=>({hit:q.hit,bounceY:q.bounceY})),
     gs:state,timer:Math.round(timer),lvName:lv.name,
-    cam2X:Math.round(cam2X),
+    brokenBricks:[...lv.brokenBricks],
   });
 }
 
@@ -597,17 +597,29 @@ function applyHostState(d){
   if(dist>3*32||d.p2.dead!==p2.dead||d.p2.outOfLives!==p2.outOfLives){
     Object.assign(p2,d.p2); // hard snap for big discrepancy or life-state change
   }else{
-    // Nudge local position toward authoritative host position
+    // Nudge local position toward authoritative host position (don't override velocity — breaks local jump)
     p2.x+=(hx-p2.x)*.3;p2.y+=(hy-p2.y)*.3;
-    // Apply all game-state fields from host (not position)
+    // Apply game-state fields from host (not position or velocity)
     p2.power=d.p2.power;p2.coins=d.p2.coins;p2.score=d.p2.score;
     p2.lives=d.p2.lives;p2.dead=d.p2.dead;p2.outOfLives=d.p2.outOfLives;
     p2.invincible=d.p2.invincible;p2.ammo=d.p2.ammo;p2.h=d.p2.h;
+    p2.facing=d.p2.facing;p2.wf=d.p2.wf;
   }
   for(let i=0;i<d.enemies.length&&i<lv.enemies.length;i++)Object.assign(lv.enemies[i],d.enemies[i]);
   fireballs=d.fireballs.map(f=>Object.assign({bounces:99},f));
   for(let i=0;i<d.powerups.length&&i<powerups.length;i++)Object.assign(powerups[i],d.powerups[i]);
   if(d.qblocks)for(let i=0;i<d.qblocks.length&&i<lv.qblocks.length;i++)Object.assign(lv.qblocks[i],d.qblocks[i]);
+  // Sync broken bricks from host
+  if(d.brokenBricks){
+    for(const pos of d.brokenBricks){
+      if(!lv.brokenBricks.has(pos)){
+        lv.brokenBricks.add(pos);
+        const[bx,by]=pos.split('_').map(Number);
+        const idx=lv.solids.findIndex(s=>s.type==='brick'&&Math.round(s.x/T)===bx&&Math.round(s.y/T)===by);
+        if(idx>=0)lv.solids.splice(idx,1);
+      }
+    }
+  }
   timer=d.timer;
   if(d.gs==='gameover'||d.gs==='win'){state=d.gs;}
   hud();
@@ -728,11 +740,6 @@ const DEFS={
     {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:50,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
-    {tx:91,h:3,dest:'_blue_end',blue:true},
-  ],
-  ghostbricks:[
-    [89,10],[89,11],[89,12],
-    [90,10],[90,11],[90,12],
   ],
   enemies:[
     // Cluster 1 — mix of ground and platform enemies so you can't just run past
@@ -759,7 +766,10 @@ const DEFS={
     [4,6,10,true],[8,6,10,true],[12,6,10,true],[16,6,10,true],[20,6,10,true],[24,6,10,true],
     [6,3,15,true],[10,3,15,true],[14,3,15,true],[18,3,15,true],[22,3,15,true],
   ],
-  pipes:[{tx:1,h:2,exit:true,dest:'1-1',spawn:[80*T,GY-50]}],
+  pipes:[
+    {tx:1,h:2,exit:true,dest:'1-1',spawn:[80*T,GY-50]},
+    {tx:24,h:3,dest:'_blue_end',blue:true},
+  ],
   enemies:[],
   checkpoints:[]},
 
@@ -1144,7 +1154,7 @@ function buildLevel(def){
 
   const ghostbricks=(def.ghostbricks||[]).map(([x,y])=>({x:x*T,y:y*T,w:T,h:T,type:def.gtype||'ground'}));
   return{
-    solids,enemies,coinObjs,qblocks,pipes,checkpoints,keys,doors,ghostbricks,
+    solids,enemies,coinObjs,qblocks,pipes,checkpoints,keys,doors,ghostbricks,brokenBricks:new Set(),
     flag:def.flag?{x:def.flag[0]*T,y:GY-T*9}:null,
     axe:def.axe?{x:def.axe[0]*T,y:GY-T,w:T,h:T,active:true}:null,
     LW,name:def.name,bg:def.bg||'day',night:def.night||false
@@ -1358,7 +1368,7 @@ function updPlayer(p,isP1){
   }
   // Big mario breaks bricks
   if(hy&&prevVy<0&&hy.type==='brick'&&p.power>=1){
-    const idx=lv.solids.indexOf(hy);if(idx>=0)lv.solids.splice(idx,1);
+    const idx=lv.solids.indexOf(hy);if(idx>=0){lv.solids.splice(idx,1);lv.brokenBricks.add(Math.round(hy.x/T)+'_'+Math.round(hy.y/T));}
     spawnPtcl(hy.x+16,hy.y+16,'#c87137',8);p.score+=50;hud();
   }
 
@@ -3087,6 +3097,7 @@ function loop(){
     if(netRole==='guest'){
       const jumpNow=guestJumped;
       updGuestLocal(p2,jumpNow);
+      updParticles();
       const t2=Math.max(0,Math.min(p2.x+p2.w/2-W/2,lv.LW*32-W));
       camX+=(t2-camX)*.14;cam2X=camX;
       sendGuestInput();
@@ -3107,6 +3118,7 @@ function loop(){
     if(netRole==='guest'){
       const jumpNow=guestJumped;
       updGuestLocal(p2,jumpNow); // local movement prediction — no lag
+      updParticles();            // keep particles/popups cleaned up on guest
       // Guest camera: track own player locally
       const t2=Math.max(0,Math.min(p2.x+p2.w/2-W/2,lv.LW*32-W));
       camX+=(t2-camX)*.14;cam2X=camX;
