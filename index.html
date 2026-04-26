@@ -164,10 +164,16 @@ document.addEventListener('keydown',e=>{
   if(!K[e.code])KP[e.code]=true;
   if(state==='play'&&!K[e.code]){
     const nt=performance.now();
-    if(e.code==='ArrowLeft'){if(nt-p1LastL<220)p1DashDir=-1;p1LastL=nt;}
-    if(e.code==='ArrowRight'){if(nt-p1LastR<220)p1DashDir=1;p1LastR=nt;}
-    if(e.code==='KeyA'){if(nt-p2LastL<220)p2DashDir=-1;p2LastL=nt;}
-    if(e.code==='KeyD'){if(nt-p2LastR<220)p2DashDir=1;p2LastR=nt;}
+    if(e.code==='ArrowLeft'){
+      if(netRole==='guest'){if(nt-p2LastL<220)p2DashDir=-1;p2LastL=nt;}
+      else{if(nt-p1LastL<220)p1DashDir=-1;p1LastL=nt;}
+    }
+    if(e.code==='ArrowRight'){
+      if(netRole==='guest'){if(nt-p2LastR<220)p2DashDir=1;p2LastR=nt;}
+      else{if(nt-p1LastR<220)p1DashDir=1;p1LastR=nt;}
+    }
+    if(e.code==='KeyA'){if(netRole!=='host'){if(nt-p2LastL<220)p2DashDir=-1;p2LastL=nt;}}
+    if(e.code==='KeyD'){if(netRole!=='host'){if(nt-p2LastR<220)p2DashDir=1;p2LastR=nt;}}
     if(e.code==='KeyN')nightMode=!nightMode;
   }
   K[e.code]=true;
@@ -585,13 +591,24 @@ function applyHostState(d){
     return;
   }
   Object.assign(p1,d.p1);
-  Object.assign(p2,d.p2);
+  // Smooth correction for P2 — guest runs local prediction, host corrects drift
+  const hx=d.p2.x,hy=d.p2.y;
+  const dist=Math.hypot(hx-p2.x,hy-p2.y);
+  if(dist>3*32||d.p2.dead!==p2.dead||d.p2.outOfLives!==p2.outOfLives){
+    Object.assign(p2,d.p2); // hard snap for big discrepancy or life-state change
+  }else{
+    // Nudge local position toward authoritative host position
+    p2.x+=(hx-p2.x)*.3;p2.y+=(hy-p2.y)*.3;
+    // Apply all game-state fields from host (not position)
+    p2.power=d.p2.power;p2.coins=d.p2.coins;p2.score=d.p2.score;
+    p2.lives=d.p2.lives;p2.dead=d.p2.dead;p2.outOfLives=d.p2.outOfLives;
+    p2.invincible=d.p2.invincible;p2.ammo=d.p2.ammo;p2.h=d.p2.h;
+  }
   for(let i=0;i<d.enemies.length&&i<lv.enemies.length;i++)Object.assign(lv.enemies[i],d.enemies[i]);
   fireballs=d.fireballs.map(f=>Object.assign({bounces:99},f));
   for(let i=0;i<d.powerups.length&&i<powerups.length;i++)Object.assign(powerups[i],d.powerups[i]);
   if(d.qblocks)for(let i=0;i<d.qblocks.length&&i<lv.qblocks.length;i++)Object.assign(lv.qblocks[i],d.qblocks[i]);
   timer=d.timer;
-  cam2X=d.cam2X;camX=cam2X; // guest camera tracks P2
   if(d.gs==='gameover'||d.gs==='win'){state=d.gs;}
   hud();
 }
@@ -1189,6 +1206,40 @@ function shopBuy(p,cost,item,label){
   else if(item==='ammo'){p.ammo=p.maxAmmo;popup(W/2,H/2-30,'AMMO FULL!','#88f');}
   else if(item==='star'){p.invincible=360;popup(W/2,H/2-30,'STAR SHIELD!','#ff0');}
   spawnPtcl(W/2,H/2,'#ffd700',12);
+}
+
+// ── GUEST LOCAL PREDICTION ────────────────────────────────────────────────────
+function updGuestLocal(p,jumpNow){
+  if(p.dead){p.vy+=GR;p.y+=p.vy;return;}
+  if(p.invincible>0)p.invincible--;
+  if(p.fireCD>0)p.fireCD--;
+  if(p.dashCD>0)p.dashCD--;
+  const myDD=p2DashDir;
+  if(myDD!==0&&p.dashCD===0){
+    p.dashTimer=14;p.dashCD=55;p.facing=myDD;p2DashDir=0;
+    spawnPtcl(p.x+p.w/2,p.y+p.h*.5,'#88eeff',10);popup(p.x+p.w/2,p.y-8,'DASH!','#88f');
+  }
+  if(p.dashTimer>0){p.dashTimer--;p.vx=p.facing*15;}
+  const left=K.KeyA||K.ArrowLeft;
+  const right=K.KeyD||K.ArrowRight;
+  const spd=p.charSpd||5.2,acc=p.onGround?.9:.4;
+  const nh=p.power>=1?52:36;if(p.h!==nh){p.y-=(nh-p.h);p.h=nh;}
+  if(right){p.vx=Math.min(p.vx+acc,spd);p.facing=1;}
+  else if(left){p.vx=Math.max(p.vx-acc,-spd);p.facing=-1;}
+  else p.vx*=p.onGround?.72:.9;
+  const maxJ=p.charMaxJumps||2;
+  if(jumpNow&&p.jumps<maxJ){
+    p.vy=p.jumps===0?(p.charJump||-13.5):-10.5;p.onGround=false;p.jumps++;
+    if(p.jumps===2)spawnPtcl(p.x+p.w/2,p.y+p.h,'#88eeff',6);
+  }
+  const holdJump=K.KeyW||K.ArrowUp||K.KeyZ;
+  if(!holdJump&&p.vy<-5&&p.jumps===1)p.vy=-5;
+  p.vy+=GR;
+  moveX(p,lv.solids);p.onGround=false;
+  moveY(p,lv.solids);
+  if(p.onGround)p.jumps=0;
+  if(p.y>H+100){p.dead=true;p.vy=-14;p.vx=0;}
+  if(Math.abs(p.vx)>.4){p.wt++;if(p.wt>4){p.wf=(p.wf+1)%6;p.wt=0;}}else p.wf=0;
 }
 
 // ── UPDATE PLAYER ─────────────────────────────────────────────────────────
@@ -3033,9 +3084,17 @@ function loop(){
   if(state==='joining'){drawJoining();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='shop'){drawShop();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='miniboss'){
-    updPlayer(p1,true);if(gameMode==='2p'||netRole==='host')updPlayer(p2,false);
-    updEnemies();updFireballs();updPowerups();updParticles();updTimer();updCam();
-    if(netRole==='host')sendState();
+    if(netRole==='guest'){
+      const jumpNow=guestJumped;
+      updGuestLocal(p2,jumpNow);
+      const t2=Math.max(0,Math.min(p2.x+p2.w/2-W/2,lv.LW*32-W));
+      camX+=(t2-camX)*.14;cam2X=camX;
+      sendGuestInput();
+    }else{
+      updPlayer(p1,true);if(gameMode==='2p'||netRole==='host')updPlayer(p2,false);
+      updEnemies();updFireballs();updPowerups();updParticles();updTimer();updCam();
+      if(netRole==='host')sendState();
+    }
     if(miniBoss&&!miniBoss.alive){
       p1.score+=miniBoss.reward;p2.score+=miniBoss.reward;hud();
       miniBoss=null;
@@ -3046,7 +3105,12 @@ function loop(){
   }
   if(state==='play'||state==='transition'){
     if(netRole==='guest'){
-      sendGuestInput(); // guest just sends keys, host runs physics
+      const jumpNow=guestJumped;
+      updGuestLocal(p2,jumpNow); // local movement prediction — no lag
+      // Guest camera: track own player locally
+      const t2=Math.max(0,Math.min(p2.x+p2.w/2-W/2,lv.LW*32-W));
+      camX+=(t2-camX)*.14;cam2X=camX;
+      sendGuestInput();          // send to host for authoritative physics
     }else{
       updPlayer(p1,true);
       if(gameMode==='2p'||netRole==='host')updPlayer(p2,false);
