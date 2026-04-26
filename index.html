@@ -645,7 +645,7 @@ const DEFS={
     {tx:31,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:78,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
+    {tx:50,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
   ],
   enemies:[
     // Cluster 1 — mix of ground and platform enemies so you can't just run past
@@ -1009,7 +1009,7 @@ function buildLevel(def){
   }
   for(const p of(def.pipes||[])){
     const py=GY-p.h*T;
-    const obj={x:p.tx*T,y:py,w:T*2,h:p.h*T,dest:p.dest,spawn:p.spawn,exit:p.exit||false};
+    const obj={x:p.tx*T,y:py,w:T*2,h:p.h*T,dest:p.dest,spawn:p.spawn,exit:p.exit||false,secret:p.secret||false};
     pipes.push(obj);solids.push({x:p.tx*T,y:py,w:T*2,h:p.h*T,type:'pipe',ref:obj});
   }
 
@@ -1182,7 +1182,8 @@ function updPlayer(p,isP1){
         const rs=returnSpawn||pipe.spawn||[14*T,GY-50];
         const prev=returnWorld||WORLDS[Math.max(0,worldIdx-1)];
         returnSpawn=null;returnWorld=null;
-        p.pipeTimer=60;setTimeout(()=>loadLevel(prev||'1-1',...rs),500);return;
+        p.pipeTimer=60;
+        setTimeout(()=>{loadLevel(prev||'1-1',...rs);p1.invincible=120;if(!p2.dead)p2.invincible=120;},500);return;
       }
     }
   }
