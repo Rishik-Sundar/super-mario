@@ -286,7 +286,7 @@ function drawJumpscare(){
       // Palm
       ctx.beginPath();ctx.ellipse(0,0,55,70,0,0,Math.PI*2);ctx.fill();ctx.stroke();
       // Fingers
-      const fingers=[[−18,−70,10,85],[−5,−75,9,90],[8,−72,9,88],[22,−65,9,80],[35,−50,8,65]];
+      const fingers=[[-18,-70,10,85],[-5,-75,9,90],[8,-72,9,88],[22,-65,9,80],[35,-50,8,65]];
       for(const[fx,fy,fw,fh]of fingers){
         ctx.beginPath();ctx.ellipse(fx,fy,fw,fh*.5,fx*.02,0,Math.PI*2);ctx.fill();ctx.stroke();
         // Claw
