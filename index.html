@@ -2031,14 +2031,31 @@ function drawPipe(p){
   );
   const isSecret=p.secret&&!p.exit;
   const isBlue=p.blue&&!p.exit;
+  // Proximity reveal: secret/blue pipes look green until player is within 2.5 tiles
+  let revealPct=0;
+  if(isSecret||isBlue){
+    const nearDist=2.5*T;
+    const d1=!p1.dead?Math.abs(p1.x+p1.w/2-(p.x+p.w/2)):999999;
+    const d2=!p2.dead?Math.abs(p2.x+p2.w/2-(p.x+p.w/2)):999999;
+    const closest=Math.min(d1,d2);
+    revealPct=Math.max(0,Math.min(1,1-(closest-T)/(nearDist-T)));
+  }
   const glowCol=isBlue?'#00cfff':isSecret?'#ffd700':'#0f0';
   if(entering){ctx.save();ctx.shadowColor=glowCol;ctx.shadowBlur=18;}
-  // Blue=cyan, Secret=gold, Normal=green
-  const c1=isBlue?'#003a5a':isSecret?'#5a3a00':'#1a5e1a';
-  const c2=isBlue?'#0088bb':isSecret?'#c8860a':'#2e8b2e';
-  const c3=isBlue?'#006090':isSecret?'#a07008':'#2d7a2d';
-  const c4=isBlue?'#00cfff':isSecret?'#e8a820':'#4caf50';
-  const c5=isBlue?'#001e30':isSecret?'#3d2800':'#0d3d0d';
+  // Lerp between green and secret/blue color based on proximity
+  function lerpHex(a,b,t){
+    const ah=parseInt(a.slice(1),16),bh=parseInt(b.slice(1),16);
+    const r=Math.round(((ah>>16)&0xff)*(1-t)+((bh>>16)&0xff)*t);
+    const g=Math.round(((ah>>8)&0xff)*(1-t)+((bh>>8)&0xff)*t);
+    const bl2=Math.round((ah&0xff)*(1-t)+(bh&0xff)*t);
+    return '#'+[r,g,bl2].map(v=>v.toString(16).padStart(2,'0')).join('');
+  }
+  const rc1=isBlue?lerpHex('#1a5e1a','#003a5a',revealPct):lerpHex('#1a5e1a','#5a3a00',revealPct);
+  const rc2=isBlue?lerpHex('#2e8b2e','#0088bb',revealPct):lerpHex('#2e8b2e','#c8860a',revealPct);
+  const rc3=isBlue?lerpHex('#2d7a2d','#006090',revealPct):lerpHex('#2d7a2d','#a07008',revealPct);
+  const rc4=isBlue?lerpHex('#4caf50','#00cfff',revealPct):lerpHex('#4caf50','#e8a820',revealPct);
+  const rc5=isBlue?lerpHex('#0d3d0d','#001e30',revealPct):lerpHex('#0d3d0d','#3d2800',revealPct);
+  const c1=rc1,c2=rc2,c3=rc3,c4=rc4,c5=rc5;
   const pg=ctx.createLinearGradient(sx,0,sx+p.w,0);
   pg.addColorStop(0,c1);pg.addColorStop(.35,c2);pg.addColorStop(.65,c2);pg.addColorStop(1,c1);
   ctx.fillStyle=pg;ctx.fillRect(sx+3,p.y+T,p.w-6,p.h-T);
@@ -2047,9 +2064,10 @@ function drawPipe(p){
   hg.addColorStop(0,c1);hg.addColorStop(.3,c4);hg.addColorStop(.7,c4);hg.addColorStop(1,c1);
   ctx.fillStyle=hg;ctx.fillRect(sx+1,p.y+1,p.w-2,T-2);
   ctx.strokeStyle=c5;ctx.lineWidth=2;ctx.strokeRect(sx,p.y,p.w,T);ctx.strokeRect(sx+3,p.y+T,p.w-6,p.h-T);
-  // Blue pipe label + pulsing glow
-  if(isBlue){
+  // Blue pipe sparkles + label (only fully visible when close)
+  if(isBlue&&revealPct>0){
     const pulse=Math.abs(Math.sin(tick*.07));
+    ctx.globalAlpha=revealPct;
     ctx.shadowColor='#00cfff';ctx.shadowBlur=8+pulse*16;
     ctx.fillStyle=`rgba(0,207,255,${.6+pulse*.4})`;
     const sp=Math.sin(tick*.1)*4;
@@ -2059,15 +2077,17 @@ function drawPipe(p){
     ctx.shadowBlur=0;
     ctx.fillStyle='#00cfff';ctx.font='bold 10px Arial';ctx.textAlign='center';
     ctx.fillText('SECRET',sx+p.w/2,p.y-18);
+    ctx.globalAlpha=1;
   }
-  // Secret gold pipe sparkles
-  if(isSecret){
+  // Secret gold pipe sparkles (only visible when close)
+  if(isSecret&&revealPct>0){
     const sp=Math.sin(tick*.08)*4;
+    ctx.globalAlpha=revealPct;
     ctx.fillStyle='rgba(255,215,0,.8)';ctx.shadowColor='#ffd700';ctx.shadowBlur=6;
     ctx.beginPath();ctx.arc(sx+p.w/2,p.y-6+sp,4,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(sx+6,p.y-4+sp*.7,3,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(sx+p.w-6,p.y-3+sp*.5,3,0,Math.PI*2);ctx.fill();
-    ctx.shadowBlur=0;
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
   }
   if(entering){ctx.restore();ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 16px Arial';ctx.textAlign='center';ctx.fillText('↓',sx+p.w/2,p.y-10);}
 }
