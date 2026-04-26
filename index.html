@@ -164,7 +164,29 @@ let returnSpawn=null; // where to spawn when exiting a sub-level pipe
 let returnWorld=null; // which level to return to when exiting a sub-level
 let shakeX=0,shakeY=0;
 function shake(amt=6){shakeX=(Math.random()-.5)*amt*2;shakeY=(Math.random()-.5)*amt*2;}
-let stats={kills:0,deaths:0,startTime:0,fireballs:0};
+let stats={kills:0,deaths:0,startTime:0,fireballs:0,coins:0};
+
+// ── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
+const ACH_DEFS=[
+  {id:'completionist',name:'True Completionist',desc:'Enter the secret blue pipe in 1-1',icon:'💎'},
+  {id:'explorer',     name:'Secret Explorer',   desc:'Enter any secret gold pipe',icon:'🔑'},
+  {id:'nightmare',    name:'Nightmare Survivor', desc:'Complete any Nightmare difficulty',icon:'💀'},
+  {id:'stomper',      name:'Drakus Stomper',     desc:'Defeat Drakus by stomping him',icon:'👟'},
+  {id:'speedster',    name:'Speedrunner',         desc:'Reach the 1-1 flag in under 90 seconds',icon:'⚡'},
+  {id:'deathless',    name:'Iron Run',            desc:'Reach the 1-1 flag without dying',icon:'🛡'},
+  {id:'exterminator', name:'Exterminator',        desc:'Defeat 30 enemies in one run',icon:'💥'},
+  {id:'rich',         name:'Coin Baron',          desc:'Collect 100 coins in one run',icon:'🪙'},
+];
+let achToast=null; // {text,timer}
+function getAchs(){return JSON.parse(localStorage.getItem('novabros_ach')||'{}');}
+function unlockAchievement(id){
+  const saved=getAchs();
+  if(saved[id])return;
+  saved[id]=Date.now();
+  localStorage.setItem('novabros_ach',JSON.stringify(saved));
+  const def=ACH_DEFS.find(a=>a.id===id);
+  if(def)achToast={text:def.icon+' '+def.name+' — '+def.desc,timer:240};
+}
 let p1LastL=0,p1LastR=0,p2LastL=0,p2LastR=0,p1DashDir=0,p2DashDir=0;
 let difficulty='medium'; // 'easy'|'medium'|'hard'|'nm_normal'|'nm_hard'|'nm_extreme'
 const DIFF={
@@ -646,6 +668,7 @@ const DEFS={
     {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
     {tx:50,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
+    {tx:133,h:3,dest:'_blue_end',blue:true},
   ],
   enemies:[
     // Cluster 1 — mix of ground and platform enemies so you can't just run past
@@ -1009,7 +1032,7 @@ function buildLevel(def){
   }
   for(const p of(def.pipes||[])){
     const py=GY-p.h*T;
-    const obj={x:p.tx*T,y:py,w:T*2,h:p.h*T,dest:p.dest,spawn:p.spawn,exit:p.exit||false,secret:p.secret||false};
+    const obj={x:p.tx*T,y:py,w:T*2,h:p.h*T,dest:p.dest,spawn:p.spawn,exit:p.exit||false,secret:p.secret||false,blue:p.blue||false};
     pipes.push(obj);solids.push({x:p.tx*T,y:py,w:T*2,h:p.h*T,type:'pipe',ref:obj});
   }
 
@@ -1079,7 +1102,7 @@ function startGame(){
   p2=mkPlayer(3*T,GY-50,2);
   if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;}
   loadLevel('1-1');
-  stats.kills=0;stats.deaths=0;stats.startTime=Date.now();stats.fireballs=0;
+  stats.kills=0;stats.deaths=0;stats.startTime=Date.now();stats.fireballs=0;stats.coins=0;
 }
 
 function loadLevel(name,sx,sy){
@@ -1174,6 +1197,14 @@ function updPlayer(p,isP1){
   if(down&&p.onGround&&p.pipeTimer===0){
     for(const pipe of lv.pipes){
       if(pipe.dest&&!pipe.exit&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
+        if(pipe.blue){
+          // Secret ending blue pipe
+          unlockAchievement('completionist');
+          p.score+=20000;hud();saveScore();
+          p.pipeTimer=60;
+          setTimeout(()=>{state='win';showOv('SECRET ENDING!','#00cfff',`You found the hidden blue pipe!<br><span style="font-size:14px;color:#ffd700">Achievement: True Completionist</span><br>Score: ${p1.score+p2.score}<br>${statsOverlay()}<br>Press R`);},500);return;
+        }
+        if(pipe.secret)unlockAchievement('explorer');
         returnSpawn=[pipe.x+T,GY-50]; // remember where to return near this pipe
         returnWorld=lv.name;
         p.pipeTimer=60;setTimeout(()=>loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50])),500);return;
@@ -1238,7 +1269,8 @@ function updPlayer(p,isP1){
   for(const co of lv.coinObjs){
     if(co.collected)continue;
     if(Math.abs(p.x+13-co.x)<20&&Math.abs(p.y+p.h/2-co.y)<22){
-      co.collected=true;p.coins++;p.score+=100;hud();
+      co.collected=true;p.coins++;p.score+=100;stats.coins++;hud();
+      if(stats.coins>=100)unlockAchievement('rich');
       spawnPtcl(co.x,co.y,'#ffd700',5);popup(co.x,co.y,'+100','#ffd700');
     }
   }
@@ -1285,6 +1317,7 @@ function updPlayer(p,isP1){
           e.hp--;p.vy=-13;shake(8);spawnPtcl(e.x+28,e.y,'#f44',10);
           popup(e.x+28,e.y,e.hp>0?'HP:'+e.hp:'DOWN!','#f44');
           if(e.hp<=0){e.alive=false;spawnPtcl(e.x+28,e.y+32,'#f44',25);p.score+=8000;hud();saveScore();
+            unlockAchievement('stomper');
             setTimeout(()=>{state='win';showOv('DRAKUS DEFEATED!','#ffd700',`Score: ${p1.score+p2.score}<br>${statsOverlay()}<br>Press R`);},600);}
         }else{hitPlayer(p);}
         continue;
@@ -1307,6 +1340,7 @@ function updPlayer(p,isP1){
         }else{
           e.squished=true;e.squishTimer=32;p.vy=-10;p.score+=200;hud();
           spawnPtcl(e.x+14,e.y+10,'#c0834a',6);popup(e.x+14,e.y,'+200','#ff6');shake(4);stats.kills++;
+          if(stats.kills>=30)unlockAchievement('exterminator');
         }
       }else{
         if(e.shell&&e.shellVx===0){e.shellVx=p.facing*10;p.vy=-5;}
@@ -1327,12 +1361,18 @@ function updPlayer(p,isP1){
       ax.active=false;
       for(const e of lv.enemies)if(e.type==='bowser'){e.alive=false;spawnPtcl(e.x+28,e.y+32,'#f44',25);}
       p.score+=5000;hud();
+      if(isNightmare())unlockAchievement('nightmare');
       setTimeout(()=>{saveScore();state='win';showOv('DRAKUS DEFEATED!','#ffd700',`Total Score: ${p1.score+p2.score}<br>${statsOverlay()}<br>Press R`);},800);
     }
   }
 
   if(lv.flag&&state==='play'&&p.x+p.w>lv.flag.x&&p.x<lv.flag.x+12&&p.y+p.h>lv.flag.y){
     p.score+=3000;hud();
+    if(lv.name==='1-1'){
+      const elapsed=(Date.now()-stats.startTime)/1000;
+      if(elapsed<90)unlockAchievement('speedster');
+      if(stats.deaths===0)unlockAchievement('deathless');
+    }
     worldIdx=Math.min(worldIdx+1,WORLDS.length-1);
     document.getElementById('overlay').style.display='none';
     // Spawn mini-boss challenge
@@ -1990,10 +2030,15 @@ function drawPipe(p){
     (!p2.dead&&p2.x+p2.w>p.x+4&&p2.x<p.x+p.w-4&&p2.y+p2.h>=p.y&&p2.y+p2.h<=p.y+T)
   );
   const isSecret=p.secret&&!p.exit;
-  const glowCol=isSecret?'#ffd700':'#0f0';
+  const isBlue=p.blue&&!p.exit;
+  const glowCol=isBlue?'#00cfff':isSecret?'#ffd700':'#0f0';
   if(entering){ctx.save();ctx.shadowColor=glowCol;ctx.shadowBlur=18;}
-  // Secret pipe is gold, normal is green
-  const c1=isSecret?'#5a3a00':'#1a5e1a',c2=isSecret?'#c8860a':'#2e8b2e',c3=isSecret?'#a07008':'#2d7a2d',c4=isSecret?'#e8a820':'#4caf50',c5=isSecret?'#3d2800':'#0d3d0d';
+  // Blue=cyan, Secret=gold, Normal=green
+  const c1=isBlue?'#003a5a':isSecret?'#5a3a00':'#1a5e1a';
+  const c2=isBlue?'#0088bb':isSecret?'#c8860a':'#2e8b2e';
+  const c3=isBlue?'#006090':isSecret?'#a07008':'#2d7a2d';
+  const c4=isBlue?'#00cfff':isSecret?'#e8a820':'#4caf50';
+  const c5=isBlue?'#001e30':isSecret?'#3d2800':'#0d3d0d';
   const pg=ctx.createLinearGradient(sx,0,sx+p.w,0);
   pg.addColorStop(0,c1);pg.addColorStop(.35,c2);pg.addColorStop(.65,c2);pg.addColorStop(1,c1);
   ctx.fillStyle=pg;ctx.fillRect(sx+3,p.y+T,p.w-6,p.h-T);
@@ -2002,7 +2047,20 @@ function drawPipe(p){
   hg.addColorStop(0,c1);hg.addColorStop(.3,c4);hg.addColorStop(.7,c4);hg.addColorStop(1,c1);
   ctx.fillStyle=hg;ctx.fillRect(sx+1,p.y+1,p.w-2,T-2);
   ctx.strokeStyle=c5;ctx.lineWidth=2;ctx.strokeRect(sx,p.y,p.w,T);ctx.strokeRect(sx+3,p.y+T,p.w-6,p.h-T);
-  // Secret pipe sparkles
+  // Blue pipe label + pulsing glow
+  if(isBlue){
+    const pulse=Math.abs(Math.sin(tick*.07));
+    ctx.shadowColor='#00cfff';ctx.shadowBlur=8+pulse*16;
+    ctx.fillStyle=`rgba(0,207,255,${.6+pulse*.4})`;
+    const sp=Math.sin(tick*.1)*4;
+    ctx.beginPath();ctx.arc(sx+p.w/2,p.y-8+sp,5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(sx+5,p.y-4+sp*.6,3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(sx+p.w-5,p.y-5+sp*.4,3,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#00cfff';ctx.font='bold 10px Arial';ctx.textAlign='center';
+    ctx.fillText('SECRET',sx+p.w/2,p.y-18);
+  }
+  // Secret gold pipe sparkles
   if(isSecret){
     const sp=Math.sin(tick*.08)*4;
     ctx.fillStyle='rgba(255,215,0,.8)';ctx.shadowColor='#ffd700';ctx.shadowBlur=6;
@@ -2537,6 +2595,25 @@ function drawTitle(){
   ctx.fillText('Press 1 · 2 · 3 · 4 to choose your difficulty',W/2,0);
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.restore();
+
+  // Achievements panel
+  const saved=getAchs();
+  ctx.save();ctx.translate(0,424);
+  ctx.strokeStyle='rgba(255,215,0,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(50,0);ctx.lineTo(W-50,0);ctx.stroke();
+  ctx.fillStyle='#ffd700';ctx.font='bold 12px monospace';ctx.textAlign='center';ctx.fillText('ACHIEVEMENTS  ('+Object.keys(saved).length+'/'+ACH_DEFS.length+')',W/2,14);
+  let ax=W/2-ACH_DEFS.length/2*54+3;
+  for(const a of ACH_DEFS){
+    const done=!!saved[a.id];
+    ctx.fillStyle=done?'rgba(255,215,0,.25)':'rgba(255,255,255,.06)';
+    ctx.strokeStyle=done?'#ffd700':'#555';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.roundRect(ax,22,48,48,6);ctx.fill();ctx.stroke();
+    ctx.font=done?'22px Arial':'22px Arial';ctx.globalAlpha=done?1:.3;
+    ctx.fillStyle='#fff';ctx.fillText(a.icon,ax+24,50);
+    ctx.globalAlpha=1;
+    if(done){ctx.fillStyle='#ffd700';ctx.font='8px monospace';ctx.fillText(a.name.split(' ')[0],ax+24,68);}
+    ax+=54;
+  }
+  ctx.restore();
 }
 
 function drawModeSelect(){
@@ -3008,6 +3085,22 @@ function loop(){
   if(jsActive>0)drawJumpscare();
 
   ctx.restore();
+
+  // Achievement toast
+  if(achToast){
+    achToast.timer--;
+    const alpha=Math.min(1,achToast.timer/30,achToast.timer>0?1:0);
+    ctx.save();ctx.globalAlpha=alpha;
+    ctx.fillStyle='rgba(0,0,0,.82)';
+    const tw=Math.min(ctx.measureText(achToast.text).width+40,W-40);
+    ctx.beginPath();ctx.roundRect(W/2-tw/2,H-56,tw,38,10);ctx.fill();
+    ctx.strokeStyle='#ffd700';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='#ffd700';ctx.font='bold 14px Arial';ctx.textAlign='center';
+    ctx.fillText(achToast.text,W/2,H-31);
+    ctx.restore();
+    if(achToast.timer<=0)achToast=null;
+  }
+
   requestAnimationFrame(loop);
 }
 
