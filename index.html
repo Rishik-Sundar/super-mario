@@ -199,7 +199,7 @@ let stats={kills:0,deaths:0,startTime:0,fireballs:0,coins:0};
 
 // ── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
 const ACH_DEFS=[
-  {id:'completionist',name:'True Completionist',desc:'Enter the secret blue pipe in 1-1',icon:'💎'},
+  {id:'completionist',name:'True Completionist',desc:'Find the hidden blue pipe in secret-1',icon:'💎'},
   {id:'explorer',     name:'Secret Explorer',   desc:'Enter any secret gold pipe',icon:'🔑'},
   {id:'nightmare',    name:'Nightmare Survivor', desc:'Complete any Nightmare difficulty',icon:'💀'},
   {id:'stomper',      name:'Drakus Stomper',     desc:'Defeat Drakus by stomping him',icon:'👟'},
@@ -465,6 +465,9 @@ const CHARS=[
   {id:'blaze',name:'BLAZE', color:'#ff8c00', desc:'Fast but lower jump', spd:9.0, jump:-11.0, jumps:2, fireRate:0.6, icon:'B'},
   {id:'rocky',name:'ROCKY', color:'#888888', desc:'Slow but jumps high', spd:5.0, jump:-16.0, jumps:1, fireRate:1.2, icon:'R'},
   {id:'nova', name:'NOVA',  color:'#aa44ff', desc:'Triple jump + floaty',spd:6.2, jump:-11.5, jumps:3, fireRate:0.9, icon:'N'},
+  {id:'volt', name:'VOLT',  color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:12.0,jump:-13.5,jumps:1, fireRate:0.3, icon:'V'},
+  {id:'luna', name:'LUNA',  color:'#e879f9', desc:'Quad jump floater',   spd:5.5, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
+  {id:'spike',name:'SPIKE', color:'#4ade80', desc:'High jump rapid fire', spd:7.2, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
 ];
 let p1Char=CHARS[0],p2Char=CHARS[1];
 let charSelectStep=0; // 0=P1 picking, 1=P2 picking (2P only)
@@ -590,7 +593,10 @@ function applyHostState(d){
     p1.invincible=90;if(!p2.dead)p2.invincible=90;
     return;
   }
+  // Smooth P1 position: lerp toward host value each frame instead of hard snap
+  const prevX=p1.x,prevY=p1.y;
   Object.assign(p1,d.p1);
+  if(Math.abs(prevX-p1.x)<300&&Math.abs(prevY-p1.y)<200){p1._tx=p1.x;p1._ty=p1.y;p1.x=prevX;p1.y=prevY;}
   // Guest runs local physics for P2 — only sync game-state events, never position/velocity
   // (syncing host position cancels local jumps since host state is always delayed by ping)
   if(d.p2.dead!==p2.dead||d.p2.outOfLives!==p2.outOfLives){
@@ -981,13 +987,29 @@ const DEFS={
     [6,6,5,true],[13,6,7,true],[20,6,5,false],
     [27,6,5,true],[34,6,7,true],[48,6,5,true],
   ],
-  pipes:[{tx:2,h:2,exit:true,dest:'2-1',spawn:[97*T,GY-50]}],
+  pipes:[
+    {tx:2,h:2,exit:true,dest:'2-1',spawn:[97*T,GY-50]},
+    {tx:40,h:2,dest:'secret-22',spawn:[3*T,GY-36],secret:true},
+  ],
   enemies:[
     [6,'goomba'],[9,'koopa'],[12,'goomba'],[16,'koopa'],[20,'goomba'],
     [25,'koopa'],[29,'goomba'],[33,'koopa'],[37,'goomba'],[41,'koopa'],
     [45,'goomba'],[49,'koopa'],[53,'goomba'],[58,'koopa'],[61,'goomba'],
   ],
   checkpoints:[[31]]},
+
+'secret-22':{LW:28,name:'secret-22',bg:'secret2',gtype:'stone',
+  bricks:[
+    [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],[22,10],[23,10],[24,10],[25,10],
+    [4,7],[5,7],[7,7],[8,7],[11,7],[12,7],[15,7],[16,7],[19,7],[20,7],[23,7],[24,7],
+    [6,4],[7,4],[11,4],[12,4],[16,4],[17,4],[21,4],[22,4],
+  ],
+  qdata:[
+    [3,6,8,true],[8,6,10,true],[12,6,8,true],[16,6,10,true],[20,6,8,true],[24,6,10,true],
+    [5,3,15,true],[10,3,15,true],[15,3,15,true],[20,3,15,true],
+  ],
+  pipes:[{tx:1,h:2,exit:true,dest:'2-2',spawn:[42*T,GY-50]}],
+  enemies:[],checkpoints:[]},
 
 // ── WORLD 3-1: Castle ────────────────────────────────────────────────────
 '3-1':{LW:110,name:'3-1',bg:'castle',gtype:'stone',
@@ -1049,8 +1071,23 @@ const DEFS={
     {tx:8,h:2,dest:'3-2',spawn:[3*T,GY-50]},
     {tx:45,h:2,dest:'3-2',spawn:[3*T,GY-50]},
     {tx:80,h:2,dest:'3-2',spawn:[3*T,GY-50]},
+    {tx:66,h:2,dest:'secret-31',spawn:[3*T,GY-36],secret:true},
   ],
   bowser:[100],checkpoints:[[58]],axe:[107]},
+
+'secret-31':{LW:30,name:'secret-31',bg:'secret',gtype:'stone',
+  bricks:[
+    [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],[22,10],[23,10],[24,10],[25,10],[26,10],[27,10],[28,10],
+    [4,7],[5,7],[8,7],[9,7],[13,7],[14,7],[17,7],[18,7],[22,7],[23,7],[26,7],[27,7],
+    [6,4],[7,4],[12,4],[13,4],[19,4],[20,4],[25,4],[26,4],
+  ],
+  qdata:[
+    [4,6,5,true],[9,6,5,true],[13,6,5,true],[18,6,5,true],[22,6,5,true],[27,6,5,true],
+    [6,3,10,true],[12,3,10,true],[19,3,10,true],[25,3,10,true],
+  ],
+  pipes:[{tx:1,h:2,exit:true,dest:'3-1',spawn:[68*T,GY-50]}],
+  enemies:[[8,'koopa'],[14,'goomba'],[20,'koopa'],[26,'goomba']],
+  checkpoints:[]},
 
 // ── 3-2: Castle Dungeon ───────────────────────────────────────────────────
 '3-2':{LW:55,name:'3-2',bg:'underground',ceiling:true,gtype:'stone',
@@ -2928,25 +2965,29 @@ function drawCharSelect(){
   ctx.fillText(pickLabel,W/2,55);ctx.shadowBlur=0;
   ctx.fillStyle='#aaa';ctx.font='13px monospace';ctx.fillText(subLabel,W/2,80);
 
-  let cx=W/2-370;
+  const bw=112,cardH=148,gap=8,cols=4;
   for(let i=0;i<CHARS.length;i++){
-    const ch=CHARS[i],bw=170;
-    const isLocked=i===netLockedCharIdx;   // taken by other player online
-    const isAlreadyPicked=charSelectStep===1&&p1Char===ch&&netRole!=='guest'; // local P1 pick shown
+    const ch=CHARS[i];
+    const row=Math.floor(i/cols),col=i%cols;
+    const rowCount=Math.min(cols,CHARS.length-row*cols);
+    const rowW=rowCount*(bw+gap)-gap;
+    const cx=Math.round(W/2-rowW/2+col*(bw+gap));
+    const cy=row===0?90:250;
+    const isLocked=i===netLockedCharIdx;
+    const isAlreadyPicked=charSelectStep===1&&p1Char===ch&&netRole!=='guest';
     ctx.globalAlpha=isLocked?.3:1;
     ctx.fillStyle=ch.color+'33';ctx.strokeStyle=isLocked?'#555':isAlreadyPicked?'#fff':ch.color;ctx.lineWidth=isAlreadyPicked?3:2;
-    ctx.beginPath();ctx.roundRect(cx,100,bw,200,14);ctx.fill();ctx.stroke();
-    ctx.fillStyle=isLocked?'#555':ch.color;ctx.shadowColor=isLocked?'transparent':ch.color;ctx.shadowBlur=isLocked?0:14;
-    ctx.font='bold 64px Arial';ctx.textAlign='center';ctx.fillText(ch.icon,cx+bw/2,175);
+    ctx.beginPath();ctx.roundRect(cx,cy,bw,cardH,12);ctx.fill();ctx.stroke();
+    ctx.fillStyle=isLocked?'#555':ch.color;ctx.shadowColor=isLocked?'transparent':ch.color;ctx.shadowBlur=isLocked?0:12;
+    ctx.font='bold 46px Arial';ctx.textAlign='center';ctx.fillText(ch.icon,cx+bw/2,cy+58);
     ctx.shadowBlur=0;
-    ctx.fillStyle=isLocked?'#555':'#fff';ctx.font='bold 18px Arial';ctx.fillText(ch.name,cx+bw/2,205);
-    ctx.fillStyle=isLocked?'#444':'#bbb';ctx.font='11px monospace';ctx.fillText(isLocked?'TAKEN':ch.desc,cx+bw/2,222);
-    ctx.fillStyle='#888';ctx.font='10px monospace';
-    ctx.fillText('SPD:'+ch.spd+' JMP:'+Math.abs(ch.jump)+' AIR:'+ch.jumps,cx+bw/2,240);
-    ctx.fillStyle=isLocked?'#444':ch.color;ctx.font='bold 16px monospace';
-    ctx.fillText(isLocked?'LOCKED':'Press '+(i+1),cx+bw/2,278);
+    ctx.fillStyle=isLocked?'#555':'#fff';ctx.font='bold 14px Arial';ctx.fillText(ch.name,cx+bw/2,cy+78);
+    ctx.fillStyle=isLocked?'#444':'#bbb';ctx.font='9px monospace';ctx.fillText(isLocked?'TAKEN':ch.desc,cx+bw/2,cy+93);
+    ctx.fillStyle='#888';ctx.font='8px monospace';
+    ctx.fillText('SPD:'+ch.spd+' JMP:'+Math.abs(ch.jump)+' AIR:'+ch.jumps,cx+bw/2,cy+107);
+    ctx.fillStyle=isLocked?'#444':ch.color;ctx.font='bold 13px monospace';
+    ctx.fillText(isLocked?'LOCKED':'Press '+(i+1),cx+bw/2,cy+133);
     ctx.globalAlpha=1;
-    cx+=bw+10;
   }
   ctx.globalAlpha=.6+Math.sin(tick*.1)*.4;
   ctx.fillStyle='#888';ctx.font='11px monospace';ctx.textAlign='center';
@@ -3091,6 +3132,7 @@ function loop(){
   if(state==='shop'){drawShop();ctx.restore();requestAnimationFrame(loop);return;}
   if(state==='miniboss'){
     if(netRole==='guest'){
+      if(p1._tx!==undefined){p1.x+=(p1._tx-p1.x)*.4;p1.y+=(p1._ty-p1.y)*.4;}
       updPlayer(p2,false);
       updParticles();
       const t2=Math.max(0,Math.min(p2.x+p2.w/2-W/2,lv.LW*32-W));
@@ -3111,6 +3153,7 @@ function loop(){
   }
   if(state==='play'||state==='transition'){
     if(netRole==='guest'){
+      if(p1._tx!==undefined){p1.x+=(p1._tx-p1.x)*.4;p1.y+=(p1._ty-p1.y)*.4;}
       updPlayer(p2,false); // full update: coins, powerups, enemy stomps, movement
       updParticles();
       // Guest camera: track own player locally
