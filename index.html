@@ -574,14 +574,19 @@ function sendState(){
     type:'state',
     p1:{x:p1.x,y:p1.y,vx:p1.vx,vy:p1.vy,power:p1.power,coins:p1.coins,score:p1.score,
         lives:p1.lives,dead:p1.dead,outOfLives:p1.outOfLives,invincible:p1.invincible,
-        jumps:p1.jumps,facing:p1.facing,wf:p1.wf,h:p1.h,ammo:p1.ammo},
+        jumps:p1.jumps,facing:p1.facing,wf:p1.wf,h:p1.h,ammo:p1.ammo,
+        hasKey:p1.hasKey,pipeTimer:p1.pipeTimer,fireCD:p1.fireCD},
     p2:{x:p2.x,y:p2.y,vx:p2.vx,vy:p2.vy,power:p2.power,coins:p2.coins,score:p2.score,
         lives:p2.lives,dead:p2.dead,outOfLives:p2.outOfLives,invincible:p2.invincible,
-        jumps:p2.jumps,facing:p2.facing,wf:p2.wf,h:p2.h,ammo:p2.ammo},
+        jumps:p2.jumps,facing:p2.facing,wf:p2.wf,h:p2.h,ammo:p2.ammo,
+        hasKey:p2.hasKey,pipeTimer:p2.pipeTimer,fireCD:p2.fireCD},
     enemies:lv.enemies.map(e=>({x:e.x,y:e.y,alive:e.alive,squished:e.squished,wf:e.wf,type:e.type,shell:e.shell,shellVx:e.shellVx,hp:e.hp})),
     fireballs:fireballs.map(f=>({x:f.x,y:f.y,alive:f.alive,r:f.r,owner:f.owner,isBoss:f.isBoss})),
     powerups:powerups.map(p=>({x:p.x,y:p.y,alive:p.alive,type:p.type})),
     qblocks:lv.qblocks.map(q=>({hit:q.hit,bounceY:q.bounceY})),
+    coinObjs:lv.coinObjs.map(c=>({collected:c.collected})),
+    keys:lv.keys.map(k=>({collected:k.collected})),
+    doors:lv.doors.map(d=>({open:d.open})),
     gs:state,timer:Math.round(timer),lvName:lv.name,
     brokenBricks:[...lv.brokenBricks],
   });
@@ -590,6 +595,7 @@ function sendState(){
 function applyHostState(d){
   if(d.lvName&&lv&&d.lvName!==lv.name){
     loadLevel(d.lvName);
+    p1._tx=undefined;p1._ty=undefined; // clear stale interpolation target
     p1.invincible=90;if(!p2.dead)p2.invincible=90;
     return;
   }
@@ -610,6 +616,17 @@ function applyHostState(d){
   fireballs=d.fireballs.map(f=>Object.assign({bounces:99},f));
   for(let i=0;i<d.powerups.length&&i<powerups.length;i++)Object.assign(powerups[i],d.powerups[i]);
   if(d.qblocks)for(let i=0;i<d.qblocks.length&&i<lv.qblocks.length;i++)Object.assign(lv.qblocks[i],d.qblocks[i]);
+  // Sync coins, keys, doors from host
+  if(d.coinObjs)for(let i=0;i<d.coinObjs.length&&i<lv.coinObjs.length;i++)lv.coinObjs[i].collected=d.coinObjs[i].collected;
+  if(d.keys)for(let i=0;i<d.keys.length&&i<lv.keys.length;i++)lv.keys[i].collected=d.keys[i].collected;
+  if(d.doors){
+    for(let i=0;i<d.doors.length&&i<lv.doors.length;i++){
+      if(d.doors[i].open&&!lv.doors[i].open){
+        lv.doors[i].open=true;
+        const si=lv.solids.findIndex(s=>s.ref===lv.doors[i]);if(si>=0)lv.solids.splice(si,1);
+      }
+    }
+  }
   // Sync broken bricks from host
   if(d.brokenBricks){
     for(const pos of d.brokenBricks){
@@ -1207,14 +1224,15 @@ function startGame(){
   jsTimer=difficulty==='nm_extreme'?300:difficulty==='nm_hard'?600:900;jsActive=0;
   p1=mkPlayer(2*T,GY-50,1);
   p2=mkPlayer(3*T,GY-50,2);
-  if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;}
+  if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;document.getElementById('hud2').style.display='none';}
+  else{document.getElementById('hud2').style.display='flex';}
   loadLevel('1-1');
   stats.kills=0;stats.deaths=0;stats.startTime=Date.now();stats.fireballs=0;stats.coins=0;
 }
 
 function loadLevel(name,sx,sy){
   lv=buildLevel(DEFS[name]);
-  fireballs=[];powerups=[];particles=[];popups=[];coinAnims=[];
+  fireballs=[];powerups=[];particles=[];popups=[];coinAnims=[];guestJumped=false;
   cpX=0; // reset checkpoint each level so players spawn at level start if not reached
   timer=DIFF[difficulty].timer;timerTick=0;
   const spx=sx||2*T,spy=sy||GY-50;
