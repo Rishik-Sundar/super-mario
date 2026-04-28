@@ -761,9 +761,9 @@ const DEFS={
     [93,7,5,true],
   ],
   pipes:[
-    {tx:31,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:55,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:88,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:31,h:2,dest:'1-2',spawn:[1*T,GY-50]},
+    {tx:55,h:2,dest:'1-2',spawn:[1*T,GY-50]},
+    {tx:88,h:2,dest:'1-2',spawn:[1*T,GY-50]},
     {tx:50,h:2,dest:'secret-1',spawn:[3*T,GY-50],secret:true},
   ],
   enemies:[
@@ -878,8 +878,8 @@ const DEFS={
     [97,8,5,true],[104,8,3,false],
   ],
   pipes:[
-    {tx:27,h:2,dest:'1-2',spawn:[3*T,GY-50]},
-    {tx:70,h:2,dest:'1-2',spawn:[3*T,GY-50]},
+    {tx:27,h:2,dest:'1-2',spawn:[1*T,GY-50]},
+    {tx:70,h:2,dest:'1-2',spawn:[1*T,GY-50]},
     {tx:48,h:2,dest:'secret-13',spawn:[3*T,GY-50],secret:true},
   ],
   enemies:[
@@ -1516,14 +1516,14 @@ function updPlayer(p,isP1){
         if(pipe.secret)unlockAchievement('explorer');
         returnSpawn=[pipe.x+T,GY-50]; // remember where to return near this pipe
         returnWorld=lv.name;
-        p.pipeTimer=60;setTimeout(()=>{loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50]));p1.invincible=120;if(!p2.dead)p2.invincible=120;},500);return;
+        p.pipeTimer=60;setTimeout(()=>{loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50]));p1.invincible=240;if(!p2.dead)p2.invincible=240;},500);return;
       }
       if(pipe.exit&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
         const rs=returnSpawn||pipe.spawn||[14*T,GY-50];
         const prev=returnWorld||WORLDS[Math.max(0,worldIdx-1)];
         returnSpawn=null;returnWorld=null;
         p.pipeTimer=60;
-        setTimeout(()=>{loadLevel(prev||'1-1',...rs);p1.invincible=120;if(!p2.dead)p2.invincible=120;},500);return;
+        setTimeout(()=>{loadLevel(prev||'1-1',...rs);p1.invincible=240;if(!p2.dead)p2.invincible=240;},500);return;
       }
     }
   }
