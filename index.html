@@ -464,14 +464,14 @@ function drawJumpscare(){
 }
 
 const CHARS=[
-  {id:'zane',  name:'ZANE',   color:'#ff4444', desc:'Balanced fighter',       spd:5.0, jump:-13.5, jumps:2, fireRate:1.0, icon:'Z'},
-  {id:'blaze', name:'BLAZE',  color:'#ff8c00', desc:'Fast but lower jump',    spd:7.3, jump:-11.0, jumps:2, fireRate:0.6, icon:'B'},
-  {id:'rocky', name:'ROCKY',  color:'#9b7b5a', desc:'PHM alien — huge jump',  spd:3.6, jump:-16.0, jumps:1, fireRate:1.2, icon:'🕷'},
-  {id:'nova',  name:'NOVA',   color:'#aa44ff', desc:'Triple jump + floaty',   spd:4.8, jump:-11.5, jumps:3, fireRate:0.9, icon:'N'},
-  {id:'volt',  name:'VOLT',   color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:8.3, jump:-13.5, jumps:1, fireRate:0.3, icon:'V'},
-  {id:'luna',  name:'LUNA',   color:'#e879f9', desc:'Quad jump floater',      spd:4.3, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
-  {id:'spike', name:'SPIKE',  color:'#4ade80', desc:'High jump rapid fire',   spd:5.8, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
-  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:6.8,jump:-14.5,jumps:3,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
+  {id:'zane',  name:'ZANE',   color:'#ff4444', desc:'Balanced fighter',       spd:4.8, jump:-13.5, jumps:2, fireRate:1.0, icon:'Z'},
+  {id:'blaze', name:'BLAZE',  color:'#ff8c00', desc:'Fast but lower jump',    spd:7.1, jump:-11.0, jumps:2, fireRate:0.6, icon:'B'},
+  {id:'rocky', name:'ROCKY',  color:'#9b7b5a', desc:'PHM alien — huge jump',  spd:3.4, jump:-16.0, jumps:1, fireRate:1.2, icon:'🕷'},
+  {id:'nova',  name:'NOVA',   color:'#aa44ff', desc:'Triple jump + floaty',   spd:4.6, jump:-11.5, jumps:3, fireRate:0.9, icon:'N'},
+  {id:'volt',  name:'VOLT',   color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:8.1, jump:-13.5, jumps:1, fireRate:0.3, icon:'V'},
+  {id:'luna',  name:'LUNA',   color:'#e879f9', desc:'Quad jump floater',      spd:4.1, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
+  {id:'spike', name:'SPIKE',  color:'#4ade80', desc:'High jump rapid fire',   spd:5.6, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
+  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:6.6,jump:-14.5,jumps:3,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
 ];
 let p1Char=CHARS[0],p2Char=CHARS[1];
 let charSelectStep=0; // 0=P1 picking, 1=P2 picking (2P only)
@@ -872,11 +872,10 @@ const DEFS={
     [112,10],[113,10],[114,10],[115,10],[116,10],
   ],
   qdata:[
-    [5,8,3,false],[12,6,5,true],[17,6,3,false],
-    [24,8,3,false],[30,6,5,true],[37,4,3,true],[42,6,3,false],
-    [46,8,3,false],[52,6,5,true],[57,4,5,true],[61,6,3,false],
-    [68,8,3,false],[74,6,5,true],[82,4,3,true],[87,6,3,false],
-    [94,8,3,false],[101,6,5,true],[102,6,5,true],[106,4,3,false],[110,6,3,false],
+    [7,8,5,true],[20,8,3,false],[27,8,5,true],
+    [47,8,3,false],[54,8,5,true],
+    [70,8,3,false],[83,8,5,true],
+    [97,8,5,true],[104,8,3,false],
   ],
   pipes:[
     {tx:27,h:2,dest:'1-2',spawn:[3*T,GY-50]},
