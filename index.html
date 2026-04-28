@@ -469,8 +469,7 @@ const CHARS=[
   {id:'volt',  name:'VOLT',   color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:8.5, jump:-13.5, jumps:1, fireRate:0.3, icon:'V'},
   {id:'luna',  name:'LUNA',   color:'#e879f9', desc:'Quad jump floater',      spd:4.5, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
   {id:'spike', name:'SPIKE',  color:'#4ade80', desc:'High jump rapid fire',   spd:6.0, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
-  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:7.0,jump:-14.5,jumps:2,fireRate:1.4,icon:'Ry'},
-  {id:'grace', name:'GRACE',  color:'#34d399', desc:'Earth ace, rapid fire',  spd:6.2, jump:-13.0, jumps:2, fireRate:2.0, icon:'G'},
+  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:7.0,jump:-14.5,jumps:2,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
 ];
 let p1Char=CHARS[0],p2Char=CHARS[1];
 let charSelectStep=0; // 0=P1 picking, 1=P2 picking (2P only)
@@ -1636,7 +1635,7 @@ function updPlayer(p,isP1){
     else if(p.ammo<=0){popup(p.x+13,p.y-10,'Reloading...','#88f');}
     else{
       stats.fireballs++;p.ammo--;p.ammoTimer=0;p.fireCD=fcd;hud();
-      const eb=p.charId==='ryland'||p.charId==='grace';
+      const eb=p.charId==='ryland';
       fireballs.push({x:p.x+(p.facing>0?p.w+2:-2),y:p.y+p.h*.35,vx:p.facing*11,vy:-1,alive:true,bounces:5,owner:p.num,r:7,earthBall:eb});
       spawnPtcl(p.x+(p.facing>0?p.w+4:-4),p.y+p.h*.35,eb?'#5d8a3c':p.num===1?'#f80':'#4f4',4);
     }
@@ -3159,8 +3158,9 @@ function drawCharSelect(){
     ctx.fillStyle=isLocked?'#555':ch.color;ctx.shadowColor=isLocked?'transparent':ch.color;ctx.shadowBlur=isLocked?0:12;
     ctx.font=ch.icon.length>1?'bold 28px Arial':'bold 42px Arial';ctx.textAlign='center';ctx.fillText(ch.icon,cx+bw/2,cy+52);
     ctx.shadowBlur=0;
-    ctx.fillStyle=isLocked?'#555':'#fff';ctx.font='bold 13px Arial';ctx.fillText(ch.name,cx+bw/2,cy+70);
-    ctx.fillStyle=isLocked?'#444':'#bbb';ctx.font='8px monospace';ctx.fillText(isLocked?'TAKEN':ch.desc,cx+bw/2,cy+84);
+    ctx.fillStyle=isLocked?'#555':ch.color;ctx.font='bold 13px Arial';ctx.fillText(ch.name,cx+bw/2,cy+70);
+    if(ch.subtitle&&!isLocked){ctx.fillStyle='#fff';ctx.font='11px Arial';ctx.fillText(ch.subtitle,cx+bw/2,cy+83);}
+    ctx.fillStyle=isLocked?'#444':'#bbb';ctx.font='8px monospace';ctx.fillText(isLocked?'TAKEN':ch.desc,cx+bw/2,cy+(ch.subtitle?93:84));
     ctx.fillStyle='#888';ctx.font='8px monospace';
     ctx.fillText('SPD:'+ch.spd+' JMP:'+Math.abs(ch.jump)+' AIR:'+ch.jumps,cx+bw/2,cy+98);
     ctx.fillStyle=isLocked?'#444':ch.color;ctx.font='bold 12px monospace';
