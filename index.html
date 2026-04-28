@@ -1384,8 +1384,8 @@ function updPlayer(p,isP1){
   if(p.charId==='ryland'&&p.spaceMode){
     if(p.invincible>0)p.invincible--;
     if(p.fireCD>0)p.fireCD--;
-    // Fast Astrophage burn in space
-    p.shipFuel=Math.max(0,p.shipFuel-7000);
+    // Astrophage burn — 2M fuel lasts ~3 minutes
+    p.shipFuel=Math.max(0,p.shipFuel-110);
     if(p.shipFuel===0){
       p.spaceMode=false;p.vy=3;
       popup(p.x+p.w/2,p.y,'FUEL EMPTY!','#ff6600');shake(8);
