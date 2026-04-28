@@ -2762,7 +2762,8 @@ function drawHailMaryShip(p,sx,cy_override){
   const _cx=cy_override!==undefined?sx:sx+p.w/2;
   const _cy=cy_override!==undefined?cy_override:p.y+p.h/2;
   ctx.translate(_cx,_cy);
-  if(p.facing===-1)ctx.scale(-1,1);
+  if(p.takingOff)ctx.rotate(-Math.PI/2);
+  else if(p.facing===-1)ctx.scale(-1,1);
 
   // ── THREE ASTROPHAGE DRIVE PODS (back, arranged in triangle) ──────────────
   const drivePods=[{ox:-68,oy:-13},{ox:-68,oy:13},{ox:-75,oy:0}];
