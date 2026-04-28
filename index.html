@@ -469,7 +469,7 @@ const CHARS=[
   {id:'volt',  name:'VOLT',   color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:8.5, jump:-13.5, jumps:1, fireRate:0.3, icon:'V'},
   {id:'luna',  name:'LUNA',   color:'#e879f9', desc:'Quad jump floater',      spd:4.5, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
   {id:'spike', name:'SPIKE',  color:'#4ade80', desc:'High jump rapid fire',   spd:6.0, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
-  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:7.0,jump:-14.5,jumps:2,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
+  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:7.0,jump:-14.5,jumps:3,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
 ];
 let p1Char=CHARS[0],p2Char=CHARS[1];
 let charSelectStep=0; // 0=P1 picking, 1=P2 picking (2P only)
@@ -1379,7 +1379,23 @@ function updPlayer(p,isP1){
     if(su)p.vy=Math.max(p.vy-1.2,-spd);
     else if(sd)p.vy=Math.min(p.vy+1.2,spd);
     else p.vy*=0.84;
-    p.x+=p.vx;p.y+=p.vy;
+    // Wall collision (no phasing!)
+    p.x+=p.vx;
+    for(const s of lv.solids){
+      if(s.type==='ground'||s.type==='mplatform')continue;
+      if(p.x+p.w>s.x&&p.x<s.x+s.w&&p.y+p.h>s.y&&p.y<s.y+s.h){
+        const oL=p.x+p.w-s.x,oR=s.x+s.w-p.x;
+        if(oL<oR){p.x=s.x-p.w;p.vx=0;}else{p.x=s.x+s.w;p.vx=0;}
+      }
+    }
+    p.y+=p.vy;
+    for(const s of lv.solids){
+      if(s.type==='ground'||s.type==='mplatform')continue;
+      if(p.x+p.w>s.x&&p.x<s.x+s.w&&p.y+p.h>s.y&&p.y<s.y+s.h){
+        const oT=p.y+p.h-s.y,oB=s.y+s.h-p.y;
+        if(oT<oB){p.y=s.y-p.h;p.vy=0;}else{p.y=s.y+s.h;p.vy=0;}
+      }
+    }
     p.x=Math.max(0,Math.min(p.x,lv.LW*T-p.w));
     p.y=Math.max(T,Math.min(p.y,GY-p.h));
     if(sf){
@@ -1387,12 +1403,13 @@ function updPlayer(p,isP1){
       fireballs.push({x:p.x+(p.facing>0?p.w+4:-12),y:p.y+p.h/2,vx:p.facing*13,vy:0,alive:true,bounces:10,owner:p.num,r:9,isBoss:false,earthBall:true});
       p.fireCD=fcd;stats.fireballs++;
     }
-    if(p.invincible===0){
+    // Ramming enemies — only when flying INTO them from the front/top at speed
+    if(p.invincible===0&&(Math.abs(p.vx)>2||Math.abs(p.vy)>2)){
       for(const e of lv.enemies){
         if(!e.alive||e.squished)continue;
         if(p.x+p.w>e.x+4&&p.x<e.x+e.w-4&&p.y+p.h>e.y+4&&p.y<e.y+e.h-4){
-          if(e.type==='bowser'||e.type==='miniboss'){e.hp--;p.invincible=30;shake(8);spawnPtcl(e.x+28,e.y,'#60a5fa',10);}
-          else{e.squished=true;e.squishTimer=30;p.score+=300;hud();spawnPtcl(e.x+14,e.y+10,'#60a5fa',8);popup(e.x+14,e.y,'SHIP +300','#60a5fa');shake(3);}
+          if(e.type==='bowser'||e.type==='miniboss'){e.hp--;p.invincible=45;shake(8);spawnPtcl(e.x+28,e.y,'#60a5fa',10);}
+          else{e.squished=true;e.squishTimer=30;p.score+=300;hud();spawnPtcl(e.x+14,e.y+10,'#60a5fa',8);popup(e.x+14,e.y,'RAM +300','#60a5fa');shake(3);}
         }
       }
     }
@@ -1401,6 +1418,17 @@ function updPlayer(p,isP1){
       if(Math.abs(p.x+p.w/2-co.x)<22&&Math.abs(p.y+p.h/2-co.y)<22){
         co.collected=true;p.coins++;p.score+=100;stats.coins++;hud();
         spawnPtcl(co.x,co.y,'#ffd700',4);popup(co.x,co.y,'+100','#ffd700');
+      }
+    }
+    // Sky ring collection
+    if(p.shipRings){
+      for(const r of p.shipRings){
+        if(r.hit)continue;
+        const cx=p.x+p.w/2,cy=p.y+p.h/2;
+        if(Math.abs(cx-r.x)<r.radius+18&&Math.abs(cy-r.y)<r.radius+10){
+          r.hit=true;p.score+=500;hud();
+          popup(r.x,r.y,'RING +500','#ffd700');spawnPtcl(r.x,r.y,'#ffd700',16);shake(3);
+        }
       }
     }
     if(exitShip){
@@ -1414,6 +1442,12 @@ function updPlayer(p,isP1){
     p.inShip=true;p.vy=-2;
     popup(p.x+p.w/2,p.y,'HAIL MARY!','#60a5fa');
     spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#60a5fa',14);
+    // Generate sky rings spread across the level
+    const lvW=lv.LW*T;const spacing=lvW/6;
+    p.shipRings=[];
+    for(let i=1;i<=5;i++){
+      p.shipRings.push({x:spacing*i,y:T*2+Math.random()*T*4,radius:28,hit:false,phase:Math.random()*Math.PI*2});
+    }
     return;
   }
   // ── END SHIP MODE ────────────────────────────────────────────────────────
@@ -2673,43 +2707,85 @@ function drawHailMaryShip(p,sx){
   if(p.invincible>0&&Math.floor(p.invincible/3)%2===1){ctx.restore();return;}
   ctx.translate(sx+p.w/2,p.y+p.h/2);
   if(p.facing===-1)ctx.scale(-1,1);
-  // Engine glow trails
-  for(let i=-1;i<=1;i++){
-    const pulse=4+Math.sin(tick*.2+i*1.5)*.9;
-    const eg=ctx.createRadialGradient(-58,i*8,0,-58,i*8,pulse+5);
-    eg.addColorStop(0,'#80efff');eg.addColorStop(.5,'#0099cc');eg.addColorStop(1,'rgba(0,120,200,0)');
-    ctx.fillStyle=eg;ctx.shadowColor='#00ccff';ctx.shadowBlur=14;
-    ctx.beginPath();ctx.arc(-58,i*8,pulse,0,Math.PI*2);ctx.fill();
+
+  // ── THREE ASTROPHAGE DRIVE PODS (back, arranged in triangle) ──────────────
+  const drivePods=[{ox:-68,oy:-13},{ox:-68,oy:13},{ox:-75,oy:0}];
+  for(const dp of drivePods){
+    // Pod body
+    ctx.fillStyle='#404055';
+    ctx.beginPath();ctx.roundRect(dp.ox,dp.oy-5,18,10,[3]);ctx.fill();
+    // Astrophage glow (warm yellow — Astrophage IR signature)
+    const pulse=5+Math.sin(tick*.18+dp.oy*.2)*1.5;
+    const ag=ctx.createRadialGradient(dp.ox-2,dp.oy,0,dp.ox-2,dp.oy,pulse+6);
+    ag.addColorStop(0,'#fff9c4');ag.addColorStop(.3,'#ffcc00');ag.addColorStop(.7,'#ff8800');ag.addColorStop(1,'rgba(200,60,0,0)');
+    ctx.fillStyle=ag;ctx.shadowColor='#ffaa00';ctx.shadowBlur=18;
+    ctx.beginPath();ctx.arc(dp.ox-2,dp.oy,pulse,0,Math.PI*2);ctx.fill();
+    // Exhaust stream
+    ctx.globalAlpha=0.3+Math.random()*.1;
+    const eg2=ctx.createLinearGradient(dp.ox-2,dp.oy,dp.ox-28,dp.oy);
+    eg2.addColorStop(0,'#ffcc44');eg2.addColorStop(1,'rgba(255,180,0,0)');
+    ctx.fillStyle=eg2;ctx.fillRect(dp.ox-28,dp.oy-3,26,6);
+    ctx.globalAlpha=1;ctx.shadowBlur=0;
+  }
+
+  // ── STRUTS connecting pods to hull ────────────────────────────────────────
+  ctx.strokeStyle='#606070';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(-55,-13);ctx.lineTo(-45,-8);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-55,13);ctx.lineTo(-45,8);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-62,0);ctx.lineTo(-45,0);ctx.stroke();
+
+  // ── HAB / SCIENCE MODULE (front section) ─────────────────────────────────
+  const hab=ctx.createLinearGradient(10,-12,10,12);
+  hab.addColorStop(0,'#c8d8e8');hab.addColorStop(.5,'#a0b8cc');hab.addColorStop(1,'#708898');
+  ctx.fillStyle=hab;ctx.beginPath();ctx.roundRect(8,-12,36,24,[5]);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.2)';ctx.fillRect(9,-11,34,8);
+  // Porthole windows on hab
+  for(let i=0;i<2;i++){
+    const wx=16+i*16;
+    const wg=ctx.createRadialGradient(wx,0,0,wx,0,6);
+    wg.addColorStop(0,'rgba(180,240,255,.9)');wg.addColorStop(.6,'rgba(80,180,220,.7)');wg.addColorStop(1,'rgba(20,80,130,.4)');
+    ctx.fillStyle=wg;ctx.shadowColor='#00ccff';ctx.shadowBlur=5;
+    ctx.beginPath();ctx.arc(wx,0,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.6)';ctx.beginPath();ctx.arc(wx-2,-2,2,0,Math.PI*2);ctx.fill();
   }
   ctx.shadowBlur=0;
-  // Drive section
-  ctx.fillStyle='#505070';ctx.beginPath();ctx.roundRect(-58,-11,20,22,[4]);ctx.fill();
-  // Main hull
-  const hg=ctx.createLinearGradient(-38,-15,-38,15);
-  hg.addColorStop(0,'#d8d8ec');hg.addColorStop(.35,'#b0b0cc');hg.addColorStop(1,'#787898');
-  ctx.fillStyle=hg;ctx.beginPath();ctx.roundRect(-38,-14,76,28,[8,10,10,8]);ctx.fill();
-  // Hull shine
-  ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.roundRect(-35,-13,70,9,[3]);ctx.fill();
-  // Nose cone
-  const ng=ctx.createLinearGradient(38,-12,60,0);
-  ng.addColorStop(0,'#a0a0c0');ng.addColorStop(1,'#c8c8e0');
+
+  // ── MAIN CYLINDER HULL ───────────────────────────────────────────────────
+  const hg=ctx.createLinearGradient(-45,-14,-45,14);
+  hg.addColorStop(0,'#e0e4f0');hg.addColorStop(.4,'#c0c8d8');hg.addColorStop(1,'#808898');
+  ctx.fillStyle=hg;ctx.beginPath();ctx.roundRect(-45,-13,56,26,[4,0,0,4]);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(-44,-12,54,7);
+  // Hull panel lines
+  ctx.strokeStyle='rgba(0,0,0,.15)';ctx.lineWidth=1;
+  for(let px=-30;px<10;px+=12){ctx.beginPath();ctx.moveTo(px,-13);ctx.lineTo(px,13);ctx.stroke();}
+
+  // ── NOSE DOME (command module) ────────────────────────────────────────────
+  const ng=ctx.createLinearGradient(44,-12,66,0);
+  ng.addColorStop(0,'#d0d8e8');ng.addColorStop(1,'#e8ecf4');
   ctx.fillStyle=ng;
-  ctx.beginPath();ctx.moveTo(38,-12);ctx.lineTo(62,0);ctx.lineTo(38,12);ctx.closePath();ctx.fill();
-  ctx.fillStyle='rgba(255,255,255,.25)';ctx.beginPath();ctx.moveTo(38,-12);ctx.lineTo(62,0);ctx.lineTo(38,-1);ctx.closePath();ctx.fill();
-  // Windows
-  for(let i=0;i<3;i++){
-    const wx=-18+i*18;
-    ctx.fillStyle='rgba(0,200,255,.65)';ctx.shadowColor='#00e0ff';ctx.shadowBlur=7;
-    ctx.beginPath();ctx.ellipse(wx,-2,7,6,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.arc(wx-2,-4,2,0,Math.PI*2);ctx.fill();
-  }
+  ctx.beginPath();ctx.moveTo(44,-10);ctx.bezierCurveTo(58,-10,68,-4,68,0);ctx.bezierCurveTo(68,4,58,10,44,10);ctx.closePath();ctx.fill();
+  // Dome window
+  const dw=ctx.createRadialGradient(56,-2,0,56,-2,8);
+  dw.addColorStop(0,'rgba(180,240,255,.9)');dw.addColorStop(.7,'rgba(60,140,200,.6)');dw.addColorStop(1,'rgba(20,60,120,.3)');
+  ctx.fillStyle=dw;ctx.shadowColor='#88ddff';ctx.shadowBlur=8;
+  ctx.beginPath();ctx.ellipse(56,-1,8,7,-.2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.arc(53,-4,2.5,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;
-  // "HAIL MARY" label
-  ctx.fillStyle='rgba(0,0,0,.6)';ctx.font='bold 5px monospace';ctx.textAlign='center';
-  ctx.fillText('HAIL MARY',0,11);
-  // Player tag
-  ctx.fillStyle=p.num===2?'#7fff00':'#ffd700';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=5;
-  ctx.font='bold 8px Arial';ctx.fillText(p.num===1?'P1':'P2',0,-20);
+
+  // ── ANTENNA + SOLAR PANEL ────────────────────────────────────────────────
+  ctx.strokeStyle='#909090';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(20,-13);ctx.lineTo(20,-22);ctx.stroke();
+  ctx.fillStyle='#4488cc';ctx.fillRect(15,-25,10,4);
+  ctx.beginPath();ctx.moveTo(0,-13);ctx.lineTo(0,-19);ctx.stroke();
+  ctx.fillStyle='#446699';ctx.fillRect(-5,-22,10,3);
+
+  // ── HAIL MARY LABEL ──────────────────────────────────────────────────────
+  ctx.fillStyle='rgba(255,255,255,.8)';ctx.font='bold 5px monospace';ctx.textAlign='center';
+  ctx.fillText('HAIL MARY',-16,8);
+
+  // ── PLAYER TAG ───────────────────────────────────────────────────────────
+  ctx.fillStyle=p.num===2?'#7fff00':'#ffd700';ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=6;
+  ctx.font='bold 9px Arial';ctx.textAlign='center';ctx.fillText(p.num===1?'P1':'P2',10,-26);
   ctx.shadowBlur=0;ctx.restore();
 }
 
@@ -2718,9 +2794,12 @@ function drawPlayer(p){
   if(p.invincible>0&&Math.floor(p.invincible/3)%2===1)return;
   const sx=p.x-camX;
   if(p.charId==='ryland'&&p.inShip){drawHailMaryShip(p,sx);return;}
+  const isRyland=p.charId==='ryland';
   const isL=p.num===2;
   const hC=isL?'#2e7d32':'#c62828',hD=isL?'#1b5e20':'#b71c1c';
-  const sC=isL?'#388e3c':'#d32f2f',oC=isL?'#1565c0':'#1565c0';
+  // Ryland: white spacesuit. Others: normal colored shirt/overalls
+  const sC=isRyland?'#dce8f5':isL?'#388e3c':'#d32f2f';
+  const oC=isRyland?'#eef2f8':isL?'#1565c0':'#1565c0';
   ctx.save();ctx.translate(sx+p.w/2,0);if(p.facing===-1)ctx.scale(-1,1);
   const ox=-p.w/2,y=p.y,w=p.w,h=p.h;
   // Ground shadow
@@ -2750,11 +2829,19 @@ function drawPlayer(p){
   ctx.beginPath();ctx.arc(ox-.5,y+h*.34+17+as,5.5,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.arc(ox+w+.5,y+h*.34+17-as,5.5,0,Math.PI*2);ctx.fill();
   // Straps
-  ctx.fillStyle='#1565c0';ctx.fillRect(ox+5,y+h*.27,5,h*.11);ctx.fillRect(ox+w-10,y+h*.27,5,h*.11);
+  const strapC=isRyland?'#a0b8d0':'#1565c0';
+  ctx.fillStyle=strapC;ctx.fillRect(ox+5,y+h*.27,5,h*.11);ctx.fillRect(ox+w-10,y+h*.27,5,h*.11);
   ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=4;
   ctx.beginPath();ctx.arc(ox+7,y+h*.27,3.5,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.arc(ox+w-8,y+h*.27,3.5,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;
+  // Ryland suit engraving
+  if(isRyland){
+    ctx.fillStyle='rgba(60,100,160,.7)';ctx.font='bold 5px monospace';ctx.textAlign='center';
+    ctx.fillText('RYLAND',ox+w/2,y+h*.52);
+    ctx.fillStyle='rgba(60,100,160,.5)';ctx.font='4px monospace';
+    ctx.fillText('Grace',ox+w/2,y+h*.59);
+  }
   // Fire power aura
   if(p.power===2){
     ctx.save();ctx.globalAlpha=.18+Math.sin(tick*.15)*.08;
@@ -3382,6 +3469,26 @@ function loop(){
       vg.addColorStop(0,'rgba(80,0,0,0)');vg.addColorStop(1,'rgba(120,0,0,.55)');
       ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
     }
+    // Sky rings (Ryland ship mission)
+    for(const rp of[p1,p2]){
+      if(!rp.inShip||!rp.shipRings)continue;
+      for(const r of rp.shipRings){
+        if(r.hit)continue;
+        const rx=r.x-camX;
+        r.phase=(r.phase||0)+.04;
+        const bob=Math.sin(r.phase)*5;
+        // Outer ring glow
+        const rg=ctx.createRadialGradient(rx,r.y+bob,r.radius-6,rx,r.y+bob,r.radius+6);
+        rg.addColorStop(0,'rgba(255,215,0,0)');rg.addColorStop(.4,'rgba(255,215,0,.5)');rg.addColorStop(.7,'rgba(255,180,0,.8)');rg.addColorStop(1,'rgba(255,140,0,0)');
+        ctx.fillStyle=rg;ctx.beginPath();ctx.arc(rx,r.y+bob,r.radius+6,0,Math.PI*2);ctx.fill();
+        // Ring itself
+        ctx.strokeStyle='#ffd700';ctx.lineWidth=4;ctx.shadowColor='#ffd700';ctx.shadowBlur=14;
+        ctx.beginPath();ctx.arc(rx,r.y+bob,r.radius,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='#fff9a0';ctx.lineWidth=1.5;ctx.shadowBlur=0;
+        ctx.beginPath();ctx.arc(rx,r.y+bob,r.radius,0,Math.PI*2);ctx.stroke();
+        ctx.shadowBlur=0;
+      }
+    }
     drawPowerups();drawFireballs();drawPlayer(p1);
     if(gameMode==='2p')drawPlayer(p2);
     drawFX();
@@ -3442,6 +3549,26 @@ function loop(){
     ctx.restore();
     // Divider
     ctx.fillStyle='#000';ctx.fillRect(W/2-1,0,2,H);
+  }
+
+  // Ship mission HUD
+  for(const rp of[p1,p2]){
+    if(!rp.inShip||!rp.shipRings)continue;
+    const total=rp.shipRings.length;
+    const done=rp.shipRings.filter(r=>r.hit).length;
+    const hx=rp.num===1?8:W/2+8;
+    ctx.fillStyle='rgba(0,0,0,.65)';ctx.beginPath();ctx.roundRect(hx,H-36,170,28,[6]);ctx.fill();
+    ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=6;
+    ctx.font='bold 11px monospace';ctx.textAlign='left';
+    ctx.fillText('✦ SHIP MISSION: rings '+done+'/'+total,hx+8,H-17);
+    ctx.shadowBlur=0;
+    if(done===total){
+      ctx.fillStyle='#60a5fa';ctx.font='bold 9px monospace';
+      ctx.fillText('ALL RINGS CLEARED!  Press Q to land',hx+8,H-6);
+    } else {
+      ctx.fillStyle='#aaa';ctx.font='8px monospace';
+      ctx.fillText('Fly through each glowing ring',hx+8,H-6);
+    }
   }
 
   // Revive prompts (full canvas)
