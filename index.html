@@ -1448,9 +1448,10 @@ function updPlayer(p,isP1){
           if(b.x+b.r>e.x&&b.x-b.r<e.x+e.w&&b.y+b.r>e.y&&b.y-b.r<e.y+e.h){
             b.alive=false;e.hp--;
             if(e.hp<=0){
-              e.alive=false;p.score+=500;hud();shake(5);
+              e.alive=false;p.score+=500;p.coins+=3;hud();shake(5);
+              p.shipFuel=Math.min(p.shipMaxFuel,p.shipFuel+80000);
               spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#ff8800',12);
-              popup(p.x+p.w/2,p.y-20,'ALIEN DOWN +500','#ffd700');
+              popup(p.x+p.w/2,p.y-20,'ALIEN DOWN +500 +3coins +80K fuel','#ffd700');
             }
           }
         }
@@ -3176,16 +3177,16 @@ function drawShop(){
     ['4 / F','⭐ Star Shield','20 coins','5 sec of invincibility','#ff0'],
     ['5 / T','⛽ Astrophage','12 coins','+700K fuel for Ryland ship','#60a5fa'],
   ];
-  let ix=W/2-450;
+  const bw=148,gap=10;
+  let ix=W/2-((bw+gap)*items.length-gap)/2;
   for(const[key,name,cost,desc,col]of items){
-    const bw=168;
     ctx.fillStyle=col+'22';ctx.strokeStyle=col;ctx.lineWidth=2;
     ctx.beginPath();ctx.roundRect(ix,138,bw,110,10);ctx.fill();ctx.stroke();
-    ctx.fillStyle=col;ctx.font='bold 16px Arial';ctx.textAlign='center';ctx.fillText(name,ix+bw/2,165);
-    ctx.fillStyle='#ffd700';ctx.font='bold 14px monospace';ctx.fillText(cost,ix+bw/2,185);
-    ctx.fillStyle='#bbb';ctx.font='10px monospace';ctx.fillText(desc,ix+bw/2,200);
-    ctx.fillStyle='#666';ctx.font='11px monospace';ctx.fillText('P1:'+key.split('/')[0].trim()+' P2:'+key.split('/')[1].trim(),ix+bw/2,222);
-    ix+=bw+12;
+    ctx.fillStyle=col;ctx.font='bold 14px Arial';ctx.textAlign='center';ctx.fillText(name,ix+bw/2,163);
+    ctx.fillStyle='#ffd700';ctx.font='bold 13px monospace';ctx.fillText(cost,ix+bw/2,181);
+    ctx.fillStyle='#bbb';ctx.font='9px monospace';ctx.fillText(desc,ix+bw/2,197);
+    ctx.fillStyle='#666';ctx.font='10px monospace';ctx.fillText('P1:'+key.split('/')[0].trim()+' P2:'+key.split('/')[1].trim(),ix+bw/2,220);
+    ix+=bw+gap;
   }
   // Continue prompt
   ctx.globalAlpha=.6+Math.sin(tick*.1)*.4;
