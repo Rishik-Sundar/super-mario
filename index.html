@@ -464,14 +464,14 @@ function drawJumpscare(){
 }
 
 const CHARS=[
-  {id:'zane',  name:'ZANE',   color:'#ff4444', desc:'Balanced fighter',       spd:5.3, jump:-13.5, jumps:2, fireRate:1.0, icon:'Z'},
-  {id:'blaze', name:'BLAZE',  color:'#ff8c00', desc:'Fast but lower jump',    spd:7.6, jump:-11.0, jumps:2, fireRate:0.6, icon:'B'},
-  {id:'rocky', name:'ROCKY',  color:'#9b7b5a', desc:'PHM alien — huge jump',  spd:3.9, jump:-16.0, jumps:1, fireRate:1.2, icon:'🕷'},
-  {id:'nova',  name:'NOVA',   color:'#aa44ff', desc:'Triple jump + floaty',   spd:5.1, jump:-11.5, jumps:3, fireRate:0.9, icon:'N'},
-  {id:'volt',  name:'VOLT',   color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:8.6, jump:-13.5, jumps:1, fireRate:0.3, icon:'V'},
-  {id:'luna',  name:'LUNA',   color:'#e879f9', desc:'Quad jump floater',      spd:4.6, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
-  {id:'spike', name:'SPIKE',  color:'#4ade80', desc:'High jump rapid fire',   spd:6.1, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
-  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:7.1,jump:-14.5,jumps:3,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
+  {id:'zane',  name:'ZANE',   color:'#ff4444', desc:'Balanced fighter',       spd:5.0, jump:-13.5, jumps:2, fireRate:1.0, icon:'Z'},
+  {id:'blaze', name:'BLAZE',  color:'#ff8c00', desc:'Fast but lower jump',    spd:7.3, jump:-11.0, jumps:2, fireRate:0.6, icon:'B'},
+  {id:'rocky', name:'ROCKY',  color:'#9b7b5a', desc:'PHM alien — huge jump',  spd:3.6, jump:-16.0, jumps:1, fireRate:1.2, icon:'🕷'},
+  {id:'nova',  name:'NOVA',   color:'#aa44ff', desc:'Triple jump + floaty',   spd:4.8, jump:-11.5, jumps:3, fireRate:0.9, icon:'N'},
+  {id:'volt',  name:'VOLT',   color:'#00d4ff', desc:'Lightning speed, 1 jump',spd:8.3, jump:-13.5, jumps:1, fireRate:0.3, icon:'V'},
+  {id:'luna',  name:'LUNA',   color:'#e879f9', desc:'Quad jump floater',      spd:4.3, jump:-12.0, jumps:4, fireRate:0.8, icon:'L'},
+  {id:'spike', name:'SPIKE',  color:'#4ade80', desc:'High jump rapid fire',   spd:5.8, jump:-15.5, jumps:2, fireRate:1.8, icon:'S'},
+  {id:'ryland',name:'RYLAND', color:'#60a5fa', desc:'Earth ball + Hail Mary ship! (Q)',spd:6.8,jump:-14.5,jumps:3,fireRate:1.4,icon:'Ry',subtitle:'Grace'},
 ];
 let p1Char=CHARS[0],p2Char=CHARS[1];
 let charSelectStep=0; // 0=P1 picking, 1=P2 picking (2P only)
@@ -783,7 +783,7 @@ const DEFS={
 // ── SECRET-1: Hidden Bonus Room ───────────────────────────────────────────
 'secret-1':{LW:28,name:'secret-1',bg:'secret',gtype:'stone',
   bricks:[
-    [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],[22,10],[23,10],[24,10],[25,10],
+    [2,10],[3,10],[4,10],[5,10],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10],[19,10],[20,10],[21,10],[22,10],[23,10],
     [4,7],[5,7],[6,7],[8,7],[9,7],[11,7],[12,7],[14,7],[15,7],[17,7],[18,7],[20,7],[21,7],[23,7],[24,7],
     [6,4],[7,4],[8,4],[11,4],[12,4],[13,4],[16,4],[17,4],[18,4],[21,4],[22,4],[23,4],
   ],
