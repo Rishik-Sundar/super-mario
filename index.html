@@ -152,10 +152,12 @@ document.addEventListener('keydown',e=>{
     if(e.code==='Digit2')shopBuy(p1,15,'fire');
     if(e.code==='Digit3')shopBuy(p1,5,'ammo');
     if(e.code==='Digit4')shopBuy(p1,20,'star');
+    if(e.code==='Digit5')shopBuy(p1,12,'fuel');
     if(e.code==='KeyQ')shopBuy(p2,10,'life');
     if(e.code==='KeyE')shopBuy(p2,15,'fire');
     if(e.code==='KeyR')shopBuy(p2,5,'ammo');
     if(e.code==='KeyF')shopBuy(p2,20,'star');
+    if(e.code==='KeyT')shopBuy(p2,12,'fuel');
     if(e.code==='Enter'||e.code==='Space'){loadLevel(WORLDS[worldIdx]);}
     return;
   }
@@ -1267,8 +1269,8 @@ function loadLevel(name,sx,sy){
   cpX=0; // reset checkpoint each level so players spawn at level start if not reached
   timer=DIFF[difficulty].timer;timerTick=0;
   const spx=sx||2*T,spy=sy||GY-50;
-  if(!p1.dead){p1.x=spx;p1.y=spy;p1.vx=0;p1.vy=0;p1.pipeTimer=0;p1.jumps=0;p1.inShip=false;}
-  if(!p2.dead){p2.x=spx+T;p2.y=spy;p2.vx=0;p2.vy=0;p2.pipeTimer=0;p2.jumps=0;p2.inShip=false;}
+  if(!p1.dead){p1.x=spx;p1.y=spy;p1.vx=0;p1.vy=0;p1.pipeTimer=0;p1.jumps=0;p1.inShip=false;p1.takingOff=false;p1.spaceMode=false;}
+  if(!p2.dead){p2.x=spx+T;p2.y=spy;p2.vx=0;p2.vy=0;p2.pipeTimer=0;p2.jumps=0;p2.inShip=false;p2.takingOff=false;p2.spaceMode=false;}
   camX=Math.max(0,spx-W/2);
   document.getElementById('overlay').style.display='none';
   state='play';hud();introTimer=150;
@@ -1296,6 +1298,7 @@ function shopBuy(p,cost,item,label){
   else if(item==='fire'){p.power=2;p.ammo=p.maxAmmo;popup(W/2,H/2-30,'FIRE POWER!','#fa0');}
   else if(item==='ammo'){p.ammo=p.maxAmmo;popup(W/2,H/2-30,'AMMO FULL!','#88f');}
   else if(item==='star'){p.invincible=360;popup(W/2,H/2-30,'STAR SHIELD!','#ff0');}
+  else if(item==='fuel'){p.shipFuel=Math.min(p.shipMaxFuel,p.shipFuel+700000);popup(W/2,H/2-30,'+700K ASTROPHAGE!','#60a5fa');}
   spawnPtcl(W/2,H/2,'#ffd700',12);
 }
 
@@ -1384,8 +1387,8 @@ function updPlayer(p,isP1){
   if(p.charId==='ryland'&&p.spaceMode){
     if(p.invincible>0)p.invincible--;
     if(p.fireCD>0)p.fireCD--;
-    // Astrophage burn — 2M fuel lasts ~3 minutes
-    p.shipFuel=Math.max(0,p.shipFuel-110);
+    // Astrophage burn — 2M fuel lasts ~2.5 min at 60fps
+    p.shipFuel=Math.max(0,p.shipFuel-220);
     if(p.shipFuel===0){
       p.spaceMode=false;p.vy=3;
       popup(p.x+p.w/2,p.y,'FUEL EMPTY!','#ff6600');shake(8);
@@ -1406,8 +1409,8 @@ function updPlayer(p,isP1){
       s.x-=s.spd;
       if(s.x<0){s.x=W;s.y=Math.random()*H;}
     }
-    // Travel toward Tau Ceti
-    p.spaceTravelDist=Math.min(7.8,p.spaceTravelDist+0.00006);
+    // Travel toward Tau Ceti — full journey in ~2 min at 60fps
+    p.spaceTravelDist=Math.min(7.8,p.spaceTravelDist+0.00108);
     // Spawn alien ships
     p.spaceEnemyTimer--;
     if(p.spaceEnemyTimer<=0){
@@ -3171,8 +3174,9 @@ function drawShop(){
     ['2 / E','🔥 Fire Power','15 coins','Get fire ability + full ammo','#fa0'],
     ['3 / R','⚡ Ammo Refill','5 coins','Refill all 5 fireballs','#88f'],
     ['4 / F','⭐ Star Shield','20 coins','5 sec of invincibility','#ff0'],
+    ['5 / T','⛽ Astrophage','12 coins','+700K fuel for Ryland ship','#60a5fa'],
   ];
-  let ix=W/2-360;
+  let ix=W/2-450;
   for(const[key,name,cost,desc,col]of items){
     const bw=168;
     ctx.fillStyle=col+'22';ctx.strokeStyle=col;ctx.lineWidth=2;
