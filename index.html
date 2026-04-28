@@ -152,12 +152,12 @@ document.addEventListener('keydown',e=>{
     if(e.code==='Digit2')shopBuy(p1,15,'fire');
     if(e.code==='Digit3')shopBuy(p1,5,'ammo');
     if(e.code==='Digit4')shopBuy(p1,20,'star');
-    if(e.code==='Digit5')shopBuy(p1,12,'fuel');
+    if(e.code==='Digit5')shopBuy(p1,8,'fuel');
     if(e.code==='KeyQ')shopBuy(p2,10,'life');
     if(e.code==='KeyE')shopBuy(p2,15,'fire');
     if(e.code==='KeyR')shopBuy(p2,5,'ammo');
     if(e.code==='KeyF')shopBuy(p2,20,'star');
-    if(e.code==='KeyT')shopBuy(p2,12,'fuel');
+    if(e.code==='KeyT')shopBuy(p2,8,'fuel');
     if(e.code==='Enter'||e.code==='Space'){loadLevel(WORLDS[worldIdx]);}
     return;
   }
@@ -1292,7 +1292,7 @@ function statsOverlay(){
 function showOv(t,col,sub){const el=document.getElementById('overlay');el.style.display='block';el.style.color=col;el.innerHTML=`${t}<br><span style="font-size:18px;color:#ccc">${sub}</span>`;}
 
 function shopBuy(p,cost,item,label){
-  if(p.coins<cost){popup(p.x||W/2,p.y||H/2,'Need '+cost+' coins!','#f55');return;}
+  if(p.coins<cost){popup(W/2,H/2,'Need '+cost+' coins!','#f55');return;}
   p.coins-=cost;hud();
   if(item==='life'){p.lives++;popup(W/2,H/2-30,'♥ +1 LIFE','#f55');}
   else if(item==='fire'){p.power=2;p.ammo=p.maxAmmo;popup(W/2,H/2-30,'FIRE POWER!','#fa0');}
@@ -3167,15 +3167,26 @@ function drawShop(){
   ctx.shadowBlur=0;
   ctx.fillStyle='#aaa';ctx.font='14px monospace';ctx.fillText('Course Clear! Spend your coins before the next world.',W/2,90);
   // Coin totals
-  ctx.fillStyle='#ff8a80';ctx.font='bold 13px monospace';ctx.fillText('P1 ZANE: ×'+p1.coins+' coins',W/2-180,118);
-  ctx.fillStyle='#69db7c';ctx.font='bold 13px monospace';ctx.fillText('P2 RIKO: ×'+p2.coins+' coins',W/2+120,118);
+  ctx.fillStyle='#ff8a80';ctx.font='bold 13px monospace';ctx.fillText('P1 '+p1Char.name+': ×'+p1.coins+' coins',W/2-180,112);
+  ctx.fillStyle='#69db7c';ctx.font='bold 13px monospace';ctx.fillText('P2 '+p2Char.name+': ×'+p2.coins+' coins',W/2+120,112);
+  // Ryland fuel gauge
+  for(const [rp,lbl,cx] of [[p1,'P1',W/2-180],[p2,'P2',W/2+80]]){
+    if(rp.charId!=='ryland')continue;
+    const fPct=rp.shipFuel/rp.shipMaxFuel;
+    const fCol=fPct>.5?'#60a5fa':fPct>.2?'#ff8800':'#ff3300';
+    ctx.fillStyle='rgba(0,0,30,.7)';ctx.beginPath();ctx.roundRect(cx-80,118,160,16,[4]);ctx.fill();
+    ctx.fillStyle=fCol;ctx.shadowColor=fCol;ctx.shadowBlur=6;
+    ctx.fillRect(cx-79,119,158*fPct,14);ctx.shadowBlur=0;
+    ctx.fillStyle='#fff';ctx.font='bold 8px monospace';ctx.textAlign='center';
+    ctx.fillText('⛽ '+(rp.shipFuel/1000000).toFixed(2)+'M / 2.00M ASTROPHAGE',cx,130);
+  }
   // Items
   const items=[
     ['1 / Q','♥ Extra Life','10 coins','Gain one extra life','#f55'],
     ['2 / E','🔥 Fire Power','15 coins','Get fire ability + full ammo','#fa0'],
     ['3 / R','⚡ Ammo Refill','5 coins','Refill all 5 fireballs','#88f'],
     ['4 / F','⭐ Star Shield','20 coins','5 sec of invincibility','#ff0'],
-    ['5 / T','⛽ Astrophage','12 coins','+700K fuel for Ryland ship','#60a5fa'],
+    ['5 / T','⛽ Astrophage','8 coins','+700K fuel for Ryland ship','#60a5fa'],
   ];
   const bw=148,gap=10;
   let ix=W/2-((bw+gap)*items.length-gap)/2;
