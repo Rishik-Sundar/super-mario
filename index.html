@@ -1396,13 +1396,13 @@ function updPlayer(p,isP1){
     }
     const su=isP1?(K.ArrowUp||K.KeyZ):(K.KeyW||K.ArrowUp);
     const sd=isP1?K.ArrowDown:(K.KeyS||K.ArrowDown);
-    const canFire=isP1?(K.KeyX&&p.fireCD===0):(K.KeyI&&p.fireCD===0);
+    const canFire=p.fireCD===0&&(isP1?(K.KeyX||K.Space):(K.KeyI||K.KeyP));
     const exitSpace=isP1?KP.KeyQ:(KP.KeyE);
     if(su)p.spaceShipY=Math.max(30,p.spaceShipY-5);
     if(sd)p.spaceShipY=Math.min(H-30,p.spaceShipY+5);
     if(canFire){
-      p.spaceBullets.push({x:210,y:p.spaceShipY,vx:14,vy:0,alive:true,isPlayer:true,r:9});
-      p.fireCD=Math.round(14*(p.charFireRate||1));
+      p.spaceBullets.push({x:220,y:p.spaceShipY,vx:20,vy:0,alive:true,isPlayer:true,r:9});
+      p.fireCD=10;
     }
     // Scroll stars
     for(const s of p.spaceStars){
@@ -3593,11 +3593,19 @@ function drawSpaceOverlay(p){
   ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='7px monospace';ctx.textAlign='left';
   ctx.fillText('TAU CETI: '+p.spaceTravelDist.toFixed(2)+' / 7.80 LY',hx+8,H-20);
   ctx.textAlign='right';ctx.fillStyle='rgba(160,160,200,.7)';
-  ctx.fillText('↑↓ move  X=fire  Q=return',hx+panW-8,H-20);
+  ctx.fillText('↑↓=move  SPACE=fire  Q=return',hx+panW-8,H-20);
   // Lives
   ctx.fillStyle='#ff6666';ctx.shadowColor='#ff2200';ctx.shadowBlur=10;
   ctx.font='bold 13px monospace';ctx.textAlign='right';
   ctx.fillText('♥ '+p.lives,W-8,20);ctx.shadowBlur=0;
+  // Fire prompt (shown while no player bullets exist)
+  if(p.spaceBullets.filter(b=>b.isPlayer&&b.alive).length===0){
+    ctx.globalAlpha=0.5+Math.abs(Math.sin(tick*.18))*.5;
+    ctx.fillStyle='#60a5fa';ctx.shadowColor='#60a5fa';ctx.shadowBlur=12;
+    ctx.font='bold 14px monospace';ctx.textAlign='center';
+    ctx.fillText('[ HOLD SPACE TO SHOOT ]',W/2,H-80);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
   // Incoming warning
   if(p.spaceEnemies.some(e=>e.alive&&e.x<W*.55)){
     ctx.globalAlpha=0.6+Math.abs(Math.sin(tick*.25))*.4;
