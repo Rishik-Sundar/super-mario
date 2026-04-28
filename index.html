@@ -679,7 +679,9 @@ function mkPlayer(x,y,num){
     ammo:5,maxAmmo:5,ammoTimer:0,
     fireCD:0,cpReached:false,dashTimer:0,dashCD:0,
     charSpd:ch.spd,charJump:ch.jump,charMaxJumps:ch.jumps,charFireRate:ch.fireRate,charColor:ch.color,charId:ch.id,hasKey:false,
-    inShip:false,shipFuel:2000000,shipMaxFuel:2000000,shipRings:null,shipQuest:null};
+    inShip:false,shipFuel:2000000,shipMaxFuel:2000000,shipRings:null,shipQuest:null,
+    takingOff:false,takeoffTimer:0,spaceMode:false,spaceShipY:0,
+    spaceEnemies:[],spaceBullets:[],spaceTravelDist:0,spaceEnemyTimer:0,spaceStars:null};
 }
 
 // ── PHYSICS ──────────────────────────────────────────────────────────────
@@ -1363,122 +1365,119 @@ function updPlayer(p,isP1){
     }
     return;
   }
-  // ── HAIL MARY SHIP MODE ─────────────────────────────────────────────────
-  if(p.charId==='ryland'&&p.inShip){
-    if(p.fireCD>0)p.fireCD--;
-    if(p.invincible>0)p.invincible--;
-    const spd=8;
-    // Fuel burn — 200/frame idle, 600/frame thrusting
-    const thrusting=(isP1?(K.ArrowLeft||K.ArrowRight||K.ArrowUp||K.KeyZ||K.ArrowDown):(K.KeyA||K.KeyD||K.KeyW||K.KeyS||K.ArrowLeft||K.ArrowRight||K.ArrowUp||K.ArrowDown));
-    p.shipFuel=Math.max(0,p.shipFuel-(thrusting?600:200));
-    if(p.shipFuel===0){
-      p.inShip=false;p.vy=-2;
-      popup(p.x+p.w/2,p.y,'FUEL EMPTY — EJECTED!','#ff6600');
-      spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#ff8800',16);shake(4);
-      return;
-    }
-    const sl=isP1?K.ArrowLeft:(K.KeyA||K.ArrowLeft);
-    const sr=isP1?K.ArrowRight:(K.KeyD||K.ArrowRight);
-    const su=isP1?(K.ArrowUp||K.KeyZ):(K.KeyW||K.ArrowUp);
-    const sd=isP1?K.ArrowDown:(K.KeyS||K.ArrowDown);
-    const sf=isP1?(K.KeyX&&p.fireCD===0):(K.KeyQ&&p.fireCD===0);
-    const exitShip=isP1?KP.KeyQ:(KP.KeyE);
-    if(sl){p.vx=Math.max(p.vx-1.2,-spd);p.facing=-1;}
-    else if(sr){p.vx=Math.min(p.vx+1.2,spd);p.facing=1;}
-    else p.vx*=0.84;
-    if(su)p.vy=Math.max(p.vy-1.2,-spd);
-    else if(sd)p.vy=Math.min(p.vy+1.2,spd);
-    else p.vy*=0.84;
-    // Wall collision (no phasing!)
-    p.x+=p.vx;
-    for(const s of lv.solids){
-      if(s.type==='ground'||s.type==='mplatform')continue;
-      if(p.x+p.w>s.x&&p.x<s.x+s.w&&p.y+p.h>s.y&&p.y<s.y+s.h){
-        const oL=p.x+p.w-s.x,oR=s.x+s.w-p.x;
-        if(oL<oR){p.x=s.x-p.w;p.vx=0;}else{p.x=s.x+s.w;p.vx=0;}
-      }
-    }
-    p.y+=p.vy;
-    for(const s of lv.solids){
-      if(s.type==='ground'||s.type==='mplatform')continue;
-      if(p.x+p.w>s.x&&p.x<s.x+s.w&&p.y+p.h>s.y&&p.y<s.y+s.h){
-        const oT=p.y+p.h-s.y,oB=s.y+s.h-p.y;
-        if(oT<oB){p.y=s.y-p.h;p.vy=0;}else{p.y=s.y+s.h;p.vy=0;}
-      }
-    }
-    p.x=Math.max(0,Math.min(p.x,lv.LW*T-p.w));
-    p.y=Math.max(T,Math.min(p.y,GY-p.h));
-    if(sf){
-      const fcd=Math.round(14*(p.charFireRate||1));
-      fireballs.push({x:p.x+(p.facing>0?p.w+4:-12),y:p.y+p.h/2,vx:p.facing*13,vy:0,alive:true,bounces:10,owner:p.num,r:9,isBoss:false,earthBall:true});
-      p.fireCD=fcd;stats.fireballs++;
-    }
-    // Ramming enemies — only when flying INTO them from the front/top at speed
-    if(p.invincible===0&&(Math.abs(p.vx)>2||Math.abs(p.vy)>2)){
-      for(const e of lv.enemies){
-        if(!e.alive||e.squished)continue;
-        if(p.x+p.w>e.x+4&&p.x<e.x+e.w-4&&p.y+p.h>e.y+4&&p.y<e.y+e.h-4){
-          if(e.type==='bowser'||e.type==='miniboss'){e.hp--;p.invincible=45;shake(8);spawnPtcl(e.x+28,e.y,'#60a5fa',10);}
-          else{e.squished=true;e.squishTimer=30;p.score+=300;hud();spawnPtcl(e.x+14,e.y+10,'#60a5fa',8);popup(e.x+14,e.y,'RAM +300','#60a5fa');shake(3);}
-        }
-      }
-    }
-    for(const co of lv.coinObjs){
-      if(co.collected)continue;
-      if(Math.abs(p.x+p.w/2-co.x)<22&&Math.abs(p.y+p.h/2-co.y)<22){
-        co.collected=true;p.coins++;p.score+=100;stats.coins++;hud();
-        p.shipFuel=Math.min(p.shipMaxFuel,p.shipFuel+8000);
-        spawnPtcl(co.x,co.y,'#ffd700',4);popup(co.x,co.y,'+100 +8K⛽','#ffd700');
-      }
-    }
-    // Tau Ceti quest
-    if(p.shipQuest){
-      const cx=p.x+p.w/2,cy=p.y+p.h/2;
-      for(const dest of Object.values(p.shipQuest)){
-        if(dest.reached)continue;
-        if(Math.abs(cx-dest.x)<45&&Math.abs(cy-dest.y)<45){
-          dest.reached=true;p.score+=3000;hud();
-          popup(dest.x,dest.y,'REACHED '+dest.label+'! +3000','#ffd700');
-          spawnPtcl(dest.x,dest.y,dest.color,24);shake(6);
-          p.shipFuel=Math.min(p.shipMaxFuel,p.shipFuel+200000); // reward fuel
-        }
-      }
-    }
-    // Sky ring collection
-    if(p.shipRings){
-      for(const r of p.shipRings){
-        if(r.hit)continue;
-        const cx=p.x+p.w/2,cy=p.y+p.h/2;
-        if(Math.abs(cx-r.x)<r.radius+18&&Math.abs(cy-r.y)<r.radius+10){
-          r.hit=true;p.score+=500;hud();
-          popup(r.x,r.y,'RING +500','#ffd700');spawnPtcl(r.x,r.y,'#ffd700',16);shake(3);
-        }
-      }
-    }
-    if(exitShip){
-      p.inShip=false;p.vy=0;
-      popup(p.x+p.w/2,p.y,'EJECTED!','#60a5fa');
-      spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#60a5fa',10);
+  // ── HAIL MARY TAKEOFF SEQUENCE ──────────────────────────────────────────
+  if(p.charId==='ryland'&&p.takingOff){
+    p.takeoffTimer--;
+    p.y-=4;
+    if(p.takeoffTimer<=0){
+      p.takingOff=false;p.spaceMode=true;
+      p.spaceShipY=H/2;p.spaceEnemies=[];p.spaceBullets=[];
+      p.spaceTravelDist=0;p.spaceEnemyTimer=80;
+      p.spaceStars=[];
+      for(let i=0;i<120;i++)
+        p.spaceStars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.5+0.3,spd:Math.random()*2.5+0.8});
+      shake(10);
     }
     return;
   }
-  if(p.charId==='ryland'&&(isP1?KP.KeyQ:(KP.KeyE))&&!p.inShip){
-    p.inShip=true;p.vy=-2;
-    popup(p.x+p.w/2,p.y,'HAIL MARY!','#60a5fa');
-    spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#60a5fa',14);
-    // Generate sky rings + Tau Ceti quest
-    const lvW=lv.LW*T;const spacing=lvW/6;
-    if(!p.shipRings){
-      p.shipRings=[];
-      for(let i=1;i<=5;i++)
-        p.shipRings.push({x:spacing*i,y:T*2+Math.random()*T*4,radius:28,hit:false,phase:Math.random()*Math.PI*2});
+  // ── HAIL MARY SPACE MODE ─────────────────────────────────────────────────
+  if(p.charId==='ryland'&&p.spaceMode){
+    if(p.invincible>0)p.invincible--;
+    if(p.fireCD>0)p.fireCD--;
+    // Fast Astrophage burn in space
+    p.shipFuel=Math.max(0,p.shipFuel-7000);
+    if(p.shipFuel===0){
+      p.spaceMode=false;p.vy=3;
+      popup(p.x+p.w/2,p.y,'FUEL EMPTY!','#ff6600');shake(8);
+      return;
     }
-    if(!p.shipQuest){
-      p.shipQuest={
-        tauE:{x:lvW*.62,y:T*3,reached:false,label:'TAU CETI e',color:'#60d8ff'},
-        tauStar:{x:lvW*.88,y:T*5,reached:false,label:'TAU CETI ★',color:'#ffcc44'},
-      };
+    const su=isP1?(K.ArrowUp||K.KeyZ):(K.KeyW||K.ArrowUp);
+    const sd=isP1?K.ArrowDown:(K.KeyS||K.ArrowDown);
+    const canFire=isP1?(K.KeyX&&p.fireCD===0):(K.KeyI&&p.fireCD===0);
+    const exitSpace=isP1?KP.KeyQ:(KP.KeyE);
+    if(su)p.spaceShipY=Math.max(30,p.spaceShipY-5);
+    if(sd)p.spaceShipY=Math.min(H-30,p.spaceShipY+5);
+    if(canFire){
+      p.spaceBullets.push({x:210,y:p.spaceShipY,vx:14,vy:0,alive:true,isPlayer:true,r:9});
+      p.fireCD=Math.round(14*(p.charFireRate||1));
     }
+    // Scroll stars
+    for(const s of p.spaceStars){
+      s.x-=s.spd;
+      if(s.x<0){s.x=W;s.y=Math.random()*H;}
+    }
+    // Travel toward Tau Ceti
+    p.spaceTravelDist=Math.min(7.8,p.spaceTravelDist+0.00006);
+    // Spawn alien ships
+    p.spaceEnemyTimer--;
+    if(p.spaceEnemyTimer<=0){
+      const wave=Math.floor(p.spaceTravelDist/.5)+1;
+      const count=Math.min(wave,3);
+      for(let i=0;i<count;i++){
+        p.spaceEnemies.push({x:W+40+i*60,y:30+Math.random()*(H-60),
+          vx:-(1.8+Math.random()*1.8+wave*.2),vy:0,
+          alive:true,w:44,h:28,shootTimer:Math.floor(50+Math.random()*70),hp:2});
+      }
+      p.spaceEnemyTimer=100+Math.floor(Math.random()*80)-Math.floor(p.spaceTravelDist*3);
+      p.spaceEnemyTimer=Math.max(40,p.spaceEnemyTimer);
+    }
+    // Update enemies
+    for(const e of p.spaceEnemies){
+      if(!e.alive)continue;
+      e.x+=e.vx;
+      e.vy=Math.sin(tick*.06+e.x*.005)*1.8;
+      e.y=Math.max(10,Math.min(H-10,e.y+e.vy));
+      if(e.x<-80)e.alive=false;
+      e.shootTimer--;
+      if(e.shootTimer<=0){
+        p.spaceBullets.push({x:e.x,y:e.y+e.h/2,vx:-8,vy:(Math.random()-.5)*3,alive:true,isPlayer:false,r:5});
+        e.shootTimer=Math.floor(80+Math.random()*60);
+      }
+    }
+    // Update bullets
+    for(const b of p.spaceBullets){
+      if(!b.alive)continue;
+      b.x+=b.vx;b.y+=b.vy;
+      if(b.x>W+30||b.x<-30)b.alive=false;
+      if(b.isPlayer){
+        for(const e of p.spaceEnemies){
+          if(!e.alive)continue;
+          if(b.x+b.r>e.x&&b.x-b.r<e.x+e.w&&b.y+b.r>e.y&&b.y-b.r<e.y+e.h){
+            b.alive=false;e.hp--;
+            if(e.hp<=0){
+              e.alive=false;p.score+=500;hud();shake(5);
+              spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#ff8800',12);
+              popup(p.x+p.w/2,p.y-20,'ALIEN DOWN +500','#ffd700');
+            }
+          }
+        }
+      }else{
+        // Enemy bullet hits ship (ship fixed at x≈120-210, y=spaceShipY)
+        const shipX=120,shipW=160,shipHalf=22;
+        if(p.invincible===0&&b.x>shipX&&b.x<shipX+shipW&&Math.abs(b.y-p.spaceShipY)<shipHalf){
+          b.alive=false;p.lives=Math.max(0,p.lives-1);hud();
+          p.invincible=120;shake(12);
+          spawnPtcl(shipX+40,p.spaceShipY,'#ff4444',20);
+          popup(p.x+p.w/2,p.y-20,'HIT! -1 LIFE','#ff4444');
+          if(p.lives===0){p.spaceMode=false;p.dead=true;}
+        }
+      }
+    }
+    p.spaceEnemies=p.spaceEnemies.filter(e=>e.x>-80||e.alive);
+    p.spaceBullets=p.spaceBullets.filter(b=>b.alive);
+    if(p.spaceTravelDist>=7.8){
+      p.spaceMode=false;p.score+=10000;hud();shake(14);
+      popup(p.x+p.w/2,p.y,'TAU CETI REACHED! +10000','#ffd700');
+      spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#ffd700',40);
+    }
+    if(exitSpace){p.spaceMode=false;popup(p.x+p.w/2,p.y,'RETURNED TO EARTH','#60a5fa');}
+    return;
+  }
+  // Q on ground → dramatic takeoff
+  if(p.charId==='ryland'&&(isP1?KP.KeyQ:(KP.KeyE))&&!p.takingOff&&!p.spaceMode&&p.onGround){
+    p.takingOff=true;p.takeoffTimer=90;p.vx=0;p.vy=0;
+    popup(p.x+p.w/2,p.y-10,'LAUNCH!','#ffcc00');
+    shake(8);spawnPtcl(p.x+p.w/2,p.y+p.h,'#ff8800',24);
     return;
   }
   // ── END SHIP MODE ────────────────────────────────────────────────────────
@@ -2757,10 +2756,12 @@ function drawBowser(e){
   ctx.fillText(`DRAKUS  ${e.hp}/${e.maxHp}`,bx+bw/2,by+bh/2);
 }
 
-function drawHailMaryShip(p,sx){
+function drawHailMaryShip(p,sx,cy_override){
   ctx.save();
   if(p.invincible>0&&Math.floor(p.invincible/3)%2===1){ctx.restore();return;}
-  ctx.translate(sx+p.w/2,p.y+p.h/2);
+  const _cx=cy_override!==undefined?sx:sx+p.w/2;
+  const _cy=cy_override!==undefined?cy_override:p.y+p.h/2;
+  ctx.translate(_cx,_cy);
   if(p.facing===-1)ctx.scale(-1,1);
 
   // ── THREE ASTROPHAGE DRIVE PODS (back, arranged in triangle) ──────────────
@@ -2848,7 +2849,8 @@ function drawPlayer(p){
   if(p.dead&&p.y>H+80)return;
   if(p.invincible>0&&Math.floor(p.invincible/3)%2===1)return;
   const sx=p.x-camX;
-  if(p.charId==='ryland'&&p.inShip){drawHailMaryShip(p,sx);return;}
+  if(p.charId==='ryland'&&p.takingOff){drawHailMaryShip(p,sx);return;}
+  if(p.charId==='ryland'&&p.spaceMode)return;
   const isRyland=p.charId==='ryland';
   const isL=p.num===2;
   const hC=isL?'#2e7d32':'#c62828',hD=isL?'#1b5e20':'#b71c1c';
@@ -3437,6 +3439,166 @@ function drawJoining(){
   ctx.fillText('Esc — cancel',W/2,H-16);ctx.globalAlpha=1;
 }
 
+// ── SPACE MODE DRAW FUNCTIONS ───────────────────────────────────────────────
+function drawTakeoffFlames(p){
+  const prog=1-(p.takeoffTimer/90); // 0→1 as takeoff progresses
+  const shipSX=p.x-camX;
+  const shipBotY=p.y+p.h;
+  // Yellow/orange flame burst filling from bottom
+  const flameH=H*prog;
+  const fg=ctx.createLinearGradient(0,H,0,H-flameH);
+  fg.addColorStop(0,'rgba(255,180,0,.95)');
+  fg.addColorStop(.3,'rgba(255,100,0,.85)');
+  fg.addColorStop(.7,'rgba(255,50,0,.5)');
+  fg.addColorStop(1,'rgba(200,20,0,0)');
+  ctx.fillStyle=fg;ctx.fillRect(0,H-flameH,W,flameH);
+  // Concentrated jet under ship
+  for(let i=0;i<3;i++){
+    const jg=ctx.createRadialGradient(shipSX+p.w/2,shipBotY+i*22,0,shipSX+p.w/2,shipBotY+i*22,30+i*10);
+    jg.addColorStop(0,'rgba(255,255,220,.9)');jg.addColorStop(.3,'rgba(255,160,0,.7)');jg.addColorStop(1,'rgba(255,60,0,0)');
+    ctx.fillStyle=jg;ctx.fillRect(0,0,W,H);
+  }
+  // Shockwave rings
+  ctx.save();
+  ctx.globalAlpha=0.4*(1-prog);
+  ctx.strokeStyle='#ffcc00';ctx.lineWidth=3;
+  const rr=(prog*200);
+  ctx.beginPath();ctx.arc(shipSX+p.w/2,shipBotY,rr,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='#ff8800';
+  ctx.beginPath();ctx.arc(shipSX+p.w/2,shipBotY,rr*.6,0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+  // "LAUNCH" text
+  if(prog<0.7){
+    ctx.save();ctx.globalAlpha=1-prog/0.7;
+    ctx.fillStyle='#fff9c4';ctx.shadowColor='#ffcc00';ctx.shadowBlur=30;
+    ctx.font='bold 36px monospace';ctx.textAlign='center';
+    ctx.fillText('LAUNCH!',W/2,H/2);
+    ctx.shadowBlur=0;ctx.restore();
+  }
+}
+
+function drawSpaceOverlay(p){
+  // Full-screen black space
+  ctx.fillStyle='#000814';ctx.fillRect(0,0,W,H);
+  // Scrolling star field
+  if(p.spaceStars){
+    for(const s of p.spaceStars){
+      const bri=0.4+s.r*.25+Math.sin(tick*.04+s.y)*.15;
+      ctx.globalAlpha=bri;
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+  // Distant nebulae
+  const nb1=ctx.createRadialGradient(W*.75,H*.25,0,W*.75,H*.25,130);
+  nb1.addColorStop(0,'rgba(80,30,160,.13)');nb1.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=nb1;ctx.fillRect(0,0,W,H);
+  const nb2=ctx.createRadialGradient(W*.2,H*.7,0,W*.2,H*.7,90);
+  nb2.addColorStop(0,'rgba(0,60,160,.1)');nb2.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=nb2;ctx.fillRect(0,0,W,H);
+
+  // Enemy alien ships
+  for(const e of p.spaceEnemies){
+    if(!e.alive)continue;
+    ctx.save();
+    ctx.shadowColor='#ff4400';ctx.shadowBlur=18;
+    // Body — red wedge facing left
+    ctx.fillStyle='#991100';
+    ctx.beginPath();ctx.moveTo(e.x,e.y+e.h/2);
+    ctx.lineTo(e.x+e.w,e.y+4);ctx.lineTo(e.x+e.w-10,e.y+e.h/2);ctx.lineTo(e.x+e.w,e.y+e.h-4);
+    ctx.closePath();ctx.fill();
+    ctx.fillStyle='#cc3300';
+    ctx.beginPath();ctx.moveTo(e.x,e.y+e.h/2);
+    ctx.lineTo(e.x+e.w-10,e.y+e.h*.38);ctx.lineTo(e.x+e.w-10,e.y+e.h*.62);
+    ctx.closePath();ctx.fill();
+    // Cockpit glow
+    ctx.fillStyle='rgba(255,80,0,.8)';ctx.shadowColor='#ff4400';ctx.shadowBlur=10;
+    ctx.beginPath();ctx.ellipse(e.x+10,e.y+e.h/2,7,5,0,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    // Engine glow trails
+    const eg1=ctx.createRadialGradient(e.x+e.w,e.y+e.h*.28,0,e.x+e.w,e.y+e.h*.28,10);
+    eg1.addColorStop(0,'#ff9900');eg1.addColorStop(1,'rgba(255,100,0,0)');
+    ctx.fillStyle=eg1;ctx.beginPath();ctx.arc(e.x+e.w,e.y+e.h*.28,10,0,Math.PI*2);ctx.fill();
+    const eg2=ctx.createRadialGradient(e.x+e.w,e.y+e.h*.72,0,e.x+e.w,e.y+e.h*.72,10);
+    eg2.addColorStop(0,'#ff9900');eg2.addColorStop(1,'rgba(255,100,0,0)');
+    ctx.fillStyle=eg2;ctx.beginPath();ctx.arc(e.x+e.w,e.y+e.h*.72,10,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // Player earth-ball bullets
+  for(const b of p.spaceBullets){
+    if(!b.alive||!b.isPlayer)continue;
+    ctx.save();
+    ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.clip();
+    const og=ctx.createRadialGradient(b.x-b.r*.3,b.y-b.r*.3,0,b.x,b.y,b.r);
+    og.addColorStop(0,'#4fc3f7');og.addColorStop(1,'#1565c0');
+    ctx.fillStyle=og;ctx.fillRect(b.x-b.r,b.y-b.r,b.r*2,b.r*2);
+    const ang=tick*.07;
+    ctx.fillStyle='rgba(56,142,60,.85)';
+    ctx.beginPath();ctx.ellipse(b.x+Math.cos(ang)*b.r*.4,b.y+Math.sin(ang)*b.r*.3,b.r*.55,b.r*.3,ang,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+    ctx.save();ctx.strokeStyle='rgba(136,221,255,.6)';ctx.lineWidth=2;ctx.shadowColor='#88ddff';ctx.shadowBlur=7;
+    ctx.beginPath();ctx.arc(b.x,b.y,b.r+1.5,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+  }
+  // Enemy plasma bullets
+  for(const b of p.spaceBullets){
+    if(!b.alive||b.isPlayer)continue;
+    ctx.save();ctx.shadowColor='#ff2200';ctx.shadowBlur=14;
+    const bg=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r*2.5);
+    bg.addColorStop(0,'#ffcc44');bg.addColorStop(.4,'#ff4400');bg.addColorStop(1,'rgba(200,0,0,0)');
+    ctx.fillStyle=bg;ctx.beginPath();ctx.ellipse(b.x,b.y,b.r*2.5,b.r,0,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;ctx.restore();
+  }
+
+  // Hail Mary ship (fixed screen position)
+  const shipCX=150,shipCY=p.spaceShipY;
+  drawHailMaryShip(p,shipCX,shipCY);
+
+  // ── HUD ────────────────────────────────────────────────────────────────────
+  const panW=260,hx=W/2-panW/2;
+  ctx.fillStyle='rgba(0,0,20,.88)';ctx.beginPath();ctx.roundRect(hx,H-66,panW,60,[8]);ctx.fill();
+  ctx.strokeStyle='rgba(96,165,250,.4)';ctx.lineWidth=1;ctx.strokeRect(hx,H-66,panW,60);
+  // Fuel bar
+  const fPct=p.shipFuel/p.shipMaxFuel;
+  const fCol=fPct>.5?'#ffcc00':fPct>.2?'#ff8800':'#ff3300';
+  ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(hx+8,H-62,panW-16,10);
+  ctx.fillStyle=fCol;ctx.shadowColor=fCol;ctx.shadowBlur=6;
+  ctx.fillRect(hx+8,H-62,(panW-16)*fPct,10);ctx.shadowBlur=0;
+  ctx.fillStyle='#ccc';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('⛽ '+(p.shipFuel/1000000).toFixed(2)+'M ASTROPHAGE',hx+8,H-44);
+  // Distance bar — Tau Ceti 7.80 LY
+  const distPct=p.spaceTravelDist/7.8;
+  ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(hx+8,H-38,panW-16,9);
+  const dg=ctx.createLinearGradient(hx+8,0,hx+8+(panW-16),0);
+  dg.addColorStop(0,'#60a5fa');dg.addColorStop(1,'#ffd700');
+  ctx.fillStyle=dg;ctx.fillRect(hx+8,H-38,(panW-16)*distPct,9);
+  ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='7px monospace';ctx.textAlign='left';
+  ctx.fillText('TAU CETI: '+p.spaceTravelDist.toFixed(2)+' / 7.80 LY',hx+8,H-20);
+  ctx.textAlign='right';ctx.fillStyle='rgba(160,160,200,.7)';
+  ctx.fillText('↑↓ move  X=fire  Q=return',hx+panW-8,H-20);
+  // Lives
+  ctx.fillStyle='#ff6666';ctx.shadowColor='#ff2200';ctx.shadowBlur=10;
+  ctx.font='bold 13px monospace';ctx.textAlign='right';
+  ctx.fillText('♥ '+p.lives,W-8,20);ctx.shadowBlur=0;
+  // Incoming warning
+  if(p.spaceEnemies.some(e=>e.alive&&e.x<W*.55)){
+    ctx.globalAlpha=0.6+Math.abs(Math.sin(tick*.25))*.4;
+    ctx.fillStyle='#ff4444';ctx.shadowColor='#ff0000';ctx.shadowBlur=16;
+    ctx.font='bold 15px monospace';ctx.textAlign='center';
+    ctx.fillText('⚠  INCOMING ALIENS!',W/2,30);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+  // Tau Ceti arrival flash
+  if(p.spaceTravelDist>=7.79){
+    ctx.globalAlpha=0.5+Math.abs(Math.sin(tick*.15))*.5;
+    ctx.fillStyle='#ffd700';ctx.shadowColor='#ffcc00';ctx.shadowBlur=30;
+    ctx.font='bold 20px monospace';ctx.textAlign='center';
+    ctx.fillText('TAU CETI SYSTEM — ARRIVED!',W/2,H/2-40);
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+  }
+}
+
 // ── MAIN LOOP ──────────────────────────────────────────────────────────────
 function loop(){
   ctx.clearRect(0,0,W,H);
@@ -3524,58 +3686,6 @@ function loop(){
       vg.addColorStop(0,'rgba(80,0,0,0)');vg.addColorStop(1,'rgba(120,0,0,.55)');
       ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
     }
-    // Tau Ceti quest destinations
-    for(const rp of[p1,p2]){
-      if(!rp.inShip||!rp.shipQuest)continue;
-      for(const dest of Object.values(rp.shipQuest)){
-        const dx=dest.x-camX;if(dx<-60||dx>W+60)continue;
-        const pulse=Math.sin(tick*.08)*.15;
-        ctx.save();ctx.globalAlpha=dest.reached?0.5:0.85+pulse;
-        // Planet body
-        const pr=dest.label.includes('e')?22:18;
-        const pg=ctx.createRadialGradient(dx-pr*.3,dest.y-pr*.3,0,dx,dest.y,pr);
-        if(dest.label.includes('e')){
-          pg.addColorStop(0,'#b8e4ff');pg.addColorStop(.4,'#60b0e0');pg.addColorStop(1,'#1a5080');
-        }else{
-          pg.addColorStop(0,'#fff9c4');pg.addColorStop(.4,'#ffcc44');pg.addColorStop(1,'#cc8800');
-        }
-        ctx.fillStyle=pg;ctx.shadowColor=dest.color;ctx.shadowBlur=20+pulse*10;
-        ctx.beginPath();ctx.arc(dx,dest.y,pr,0,Math.PI*2);ctx.fill();
-        if(dest.label.includes('e')){
-          ctx.save();ctx.beginPath();ctx.arc(dx,dest.y,pr,0,Math.PI*2);ctx.clip();
-          ctx.fillStyle='rgba(30,120,40,.7)';ctx.beginPath();ctx.ellipse(dx-6,dest.y-5,10,7,tick*.01,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='rgba(30,100,30,.6)';ctx.beginPath();ctx.ellipse(dx+7,dest.y+6,8,5,tick*.015,0,Math.PI*2);ctx.fill();
-          ctx.restore();
-        }
-        ctx.shadowBlur=0;
-        // Label + ring
-        ctx.strokeStyle=dest.reached?'#4ade80':dest.color;ctx.lineWidth=dest.reached?2:1.5+pulse;
-        ctx.setLineDash([4,4]);ctx.beginPath();ctx.arc(dx,dest.y,pr+7,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-        ctx.fillStyle=dest.reached?'#4ade80':dest.color;ctx.font='bold 8px monospace';ctx.textAlign='center';
-        ctx.fillText(dest.reached?'✓ REACHED':dest.label,dx,dest.y-pr-10);
-        ctx.restore();
-      }
-    }
-    // Sky rings (Ryland ship mission)
-    for(const rp of[p1,p2]){
-      if(!rp.inShip||!rp.shipRings)continue;
-      for(const r of rp.shipRings){
-        if(r.hit)continue;
-        const rx=r.x-camX;
-        r.phase=(r.phase||0)+.04;
-        const bob=Math.sin(r.phase)*5;
-        // Outer ring glow
-        const rg=ctx.createRadialGradient(rx,r.y+bob,r.radius-6,rx,r.y+bob,r.radius+6);
-        rg.addColorStop(0,'rgba(255,215,0,0)');rg.addColorStop(.4,'rgba(255,215,0,.5)');rg.addColorStop(.7,'rgba(255,180,0,.8)');rg.addColorStop(1,'rgba(255,140,0,0)');
-        ctx.fillStyle=rg;ctx.beginPath();ctx.arc(rx,r.y+bob,r.radius+6,0,Math.PI*2);ctx.fill();
-        // Ring itself
-        ctx.strokeStyle='#ffd700';ctx.lineWidth=4;ctx.shadowColor='#ffd700';ctx.shadowBlur=14;
-        ctx.beginPath();ctx.arc(rx,r.y+bob,r.radius,0,Math.PI*2);ctx.stroke();
-        ctx.strokeStyle='#fff9a0';ctx.lineWidth=1.5;ctx.shadowBlur=0;
-        ctx.beginPath();ctx.arc(rx,r.y+bob,r.radius,0,Math.PI*2);ctx.stroke();
-        ctx.shadowBlur=0;
-      }
-    }
     drawPowerups();drawFireballs();drawPlayer(p1);
     if(gameMode==='2p')drawPlayer(p2);
     drawFX();
@@ -3638,39 +3748,10 @@ function loop(){
     ctx.fillStyle='#000';ctx.fillRect(W/2-1,0,2,H);
   }
 
-  // Ship mission HUD
+  // Space overlay + takeoff flames
   for(const rp of[p1,p2]){
-    if(!rp.inShip)continue;
-    const hx=rp.num===1?6:W/2+6;
-    const panW=210;
-    ctx.fillStyle='rgba(0,0,20,.8)';ctx.beginPath();ctx.roundRect(hx,H-80,panW,76,[7]);ctx.fill();
-    ctx.strokeStyle='rgba(96,165,250,.4)';ctx.lineWidth=1;ctx.strokeRect(hx,H-80,panW,76);
-    // Fuel bar
-    const fPct=rp.shipFuel/rp.shipMaxFuel;
-    const fCol=fPct>.5?'#ffcc00':fPct>.2?'#ff8800':'#ff3300';
-    ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(hx+8,H-76,panW-16,10);
-    ctx.fillStyle=fCol;ctx.shadowColor=fCol;ctx.shadowBlur=6;
-    ctx.fillRect(hx+8,H-76,(panW-16)*fPct,10);
-    ctx.shadowBlur=0;
-    ctx.fillStyle='#fff';ctx.font='bold 7px monospace';ctx.textAlign='left';
-    const fmtFuel=(rp.shipFuel/1000000).toFixed(2)+'M / 2.00M ⛽ ASTROPHAGE';
-    ctx.fillText(fmtFuel,hx+8,H-58);
-    // Rings
-    const total=rp.shipRings?rp.shipRings.length:0;
-    const done=rp.shipRings?rp.shipRings.filter(r=>r.hit).length:0;
-    ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=4;
-    ctx.fillText('✦ RINGS: '+done+'/'+total,hx+8,H-46);
-    ctx.shadowBlur=0;
-    // Tau Ceti quest
-    if(rp.shipQuest){
-      const te=rp.shipQuest.tauE,ts=rp.shipQuest.tauStar;
-      ctx.fillStyle=te.reached?'#4ade80':'#60d8ff';ctx.font='7px monospace';
-      ctx.fillText((te.reached?'✓ ':'○ ')+'TAU CETI e',hx+8,H-34);
-      ctx.fillStyle=ts.reached?'#4ade80':'#ffcc44';
-      ctx.fillText((ts.reached?'✓ ':'○ ')+'TAU CETI ★',hx+112,H-34);
-    }
-    ctx.fillStyle='rgba(150,150,200,.7)';ctx.font='7px monospace';
-    ctx.fillText('Q=land  X=fire  coins=+8K fuel',hx+8,H-22);
+    if(rp.takingOff)drawTakeoffFlames(rp);
+    if(rp.spaceMode)drawSpaceOverlay(rp);
   }
 
   // Revive prompts (full canvas)
