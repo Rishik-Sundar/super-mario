@@ -678,7 +678,8 @@ function mkPlayer(x,y,num){
     num,power:0,score:0,coins:0,lives:DIFF[difficulty].lives,
     ammo:5,maxAmmo:5,ammoTimer:0,
     fireCD:0,cpReached:false,dashTimer:0,dashCD:0,
-    charSpd:ch.spd,charJump:ch.jump,charMaxJumps:ch.jumps,charFireRate:ch.fireRate,charColor:ch.color,charId:ch.id,hasKey:false,inShip:false};
+    charSpd:ch.spd,charJump:ch.jump,charMaxJumps:ch.jumps,charFireRate:ch.fireRate,charColor:ch.color,charId:ch.id,hasKey:false,
+    inShip:false,shipFuel:2000000,shipMaxFuel:2000000,shipRings:null,shipQuest:null};
 }
 
 // ── PHYSICS ──────────────────────────────────────────────────────────────
@@ -1367,6 +1368,15 @@ function updPlayer(p,isP1){
     if(p.fireCD>0)p.fireCD--;
     if(p.invincible>0)p.invincible--;
     const spd=8;
+    // Fuel burn — 200/frame idle, 600/frame thrusting
+    const thrusting=(isP1?(K.ArrowLeft||K.ArrowRight||K.ArrowUp||K.KeyZ||K.ArrowDown):(K.KeyA||K.KeyD||K.KeyW||K.KeyS||K.ArrowLeft||K.ArrowRight||K.ArrowUp||K.ArrowDown));
+    p.shipFuel=Math.max(0,p.shipFuel-(thrusting?600:200));
+    if(p.shipFuel===0){
+      p.inShip=false;p.vy=-2;
+      popup(p.x+p.w/2,p.y,'FUEL EMPTY — EJECTED!','#ff6600');
+      spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#ff8800',16);shake(4);
+      return;
+    }
     const sl=isP1?K.ArrowLeft:(K.KeyA||K.ArrowLeft);
     const sr=isP1?K.ArrowRight:(K.KeyD||K.ArrowRight);
     const su=isP1?(K.ArrowUp||K.KeyZ):(K.KeyW||K.ArrowUp);
@@ -1417,7 +1427,21 @@ function updPlayer(p,isP1){
       if(co.collected)continue;
       if(Math.abs(p.x+p.w/2-co.x)<22&&Math.abs(p.y+p.h/2-co.y)<22){
         co.collected=true;p.coins++;p.score+=100;stats.coins++;hud();
-        spawnPtcl(co.x,co.y,'#ffd700',4);popup(co.x,co.y,'+100','#ffd700');
+        p.shipFuel=Math.min(p.shipMaxFuel,p.shipFuel+8000);
+        spawnPtcl(co.x,co.y,'#ffd700',4);popup(co.x,co.y,'+100 +8K⛽','#ffd700');
+      }
+    }
+    // Tau Ceti quest
+    if(p.shipQuest){
+      const cx=p.x+p.w/2,cy=p.y+p.h/2;
+      for(const dest of Object.values(p.shipQuest)){
+        if(dest.reached)continue;
+        if(Math.abs(cx-dest.x)<45&&Math.abs(cy-dest.y)<45){
+          dest.reached=true;p.score+=3000;hud();
+          popup(dest.x,dest.y,'REACHED '+dest.label+'! +3000','#ffd700');
+          spawnPtcl(dest.x,dest.y,dest.color,24);shake(6);
+          p.shipFuel=Math.min(p.shipMaxFuel,p.shipFuel+200000); // reward fuel
+        }
       }
     }
     // Sky ring collection
@@ -1442,11 +1466,18 @@ function updPlayer(p,isP1){
     p.inShip=true;p.vy=-2;
     popup(p.x+p.w/2,p.y,'HAIL MARY!','#60a5fa');
     spawnPtcl(p.x+p.w/2,p.y+p.h/2,'#60a5fa',14);
-    // Generate sky rings spread across the level
+    // Generate sky rings + Tau Ceti quest
     const lvW=lv.LW*T;const spacing=lvW/6;
-    p.shipRings=[];
-    for(let i=1;i<=5;i++){
-      p.shipRings.push({x:spacing*i,y:T*2+Math.random()*T*4,radius:28,hit:false,phase:Math.random()*Math.PI*2});
+    if(!p.shipRings){
+      p.shipRings=[];
+      for(let i=1;i<=5;i++)
+        p.shipRings.push({x:spacing*i,y:T*2+Math.random()*T*4,radius:28,hit:false,phase:Math.random()*Math.PI*2});
+    }
+    if(!p.shipQuest){
+      p.shipQuest={
+        tauE:{x:lvW*.62,y:T*3,reached:false,label:'TAU CETI e',color:'#60d8ff'},
+        tauStar:{x:lvW*.88,y:T*5,reached:false,label:'TAU CETI ★',color:'#ffcc44'},
+      };
     }
     return;
   }
@@ -2494,14 +2525,38 @@ function drawFireballs(){
     else if(fb.earthBall){ctx.shadowColor='#4a7c2f';ctx.fillStyle='#5d9e3a';}
     else if(fb.owner===1){ctx.shadowColor='#ffcc00';ctx.fillStyle='#ff8800';}
     else{ctx.shadowColor='#88ff88';ctx.fillStyle='#44dd44';}
-    ctx.beginPath();ctx.arc(sx,fb.y,fb.r,0,Math.PI*2);ctx.fill();
     if(fb.earthBall){
-      // Earth-like continents on the ball
-      ctx.fillStyle='rgba(90,60,30,.6)';ctx.shadowBlur=0;
-      ctx.beginPath();ctx.arc(sx-fb.r*.3,fb.y-fb.r*.2,fb.r*.4,0,Math.PI*2);ctx.fill();
-      ctx.beginPath();ctx.arc(sx+fb.r*.3,fb.y+fb.r*.3,fb.r*.3,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle='rgba(100,200,255,.35)';ctx.beginPath();ctx.arc(sx+fb.r*.1,fb.y-fb.r*.35,fb.r*.28,0,Math.PI*2);ctx.fill();
+      // Globe — clip to circle, draw ocean + rotating continents
+      ctx.save();
+      ctx.beginPath();ctx.arc(sx,fb.y,fb.r,0,Math.PI*2);ctx.clip();
+      // Ocean
+      const og=ctx.createRadialGradient(sx-fb.r*.3,fb.y-fb.r*.3,0,sx,fb.y,fb.r);
+      og.addColorStop(0,'#5bb8e8');og.addColorStop(.5,'#1a6fa0');og.addColorStop(1,'#0d3d60');
+      ctx.fillStyle=og;ctx.fillRect(sx-fb.r,fb.y-fb.r,fb.r*2,fb.r*2);
+      // Continents (rotate slowly)
+      const rot=tick*.04;
+      const conts=[
+        {ox:Math.cos(rot)*fb.r*.45,oy:-fb.r*.28,rx:fb.r*.38,ry:fb.r*.22,a:rot*.4},
+        {ox:Math.cos(rot+2.1)*fb.r*.35,oy:fb.r*.3,rx:fb.r*.22,ry:fb.r*.28,a:rot*.3},
+        {ox:Math.cos(rot+4.2)*fb.r*.3,oy:fb.r*.05,rx:fb.r*.18,ry:fb.r*.15,a:-rot*.2},
+      ];
+      for(const c of conts){
+        ctx.fillStyle='#4a7c2f';ctx.beginPath();ctx.ellipse(sx+c.ox,fb.y+c.oy,c.rx,c.ry,c.a,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#6a9e45';ctx.beginPath();ctx.ellipse(sx+c.ox-2,fb.y+c.oy-2,c.rx*.55,c.ry*.55,c.a,0,Math.PI*2);ctx.fill();
+      }
+      // Ice caps
+      ctx.fillStyle='rgba(240,248,255,.9)';
+      ctx.beginPath();ctx.ellipse(sx,fb.y-fb.r*.8,fb.r*.4,fb.r*.18,0,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.ellipse(sx,fb.y+fb.r*.85,fb.r*.3,fb.r*.13,0,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+      // Atmosphere glow ring (outside clip)
+      const ag=ctx.createRadialGradient(sx,fb.y,fb.r*.9,sx,fb.y,fb.r*1.25);
+      ag.addColorStop(0,'rgba(100,190,255,.35)');ag.addColorStop(1,'rgba(100,190,255,0)');
+      ctx.fillStyle=ag;ctx.beginPath();ctx.arc(sx,fb.y,fb.r*1.25,0,Math.PI*2);ctx.fill();
+      // Specular highlight
+      ctx.fillStyle='rgba(255,255,255,.45)';ctx.beginPath();ctx.ellipse(sx-fb.r*.3,fb.y-fb.r*.35,fb.r*.28,fb.r*.18,-.5,0,Math.PI*2);ctx.fill();
     }else{
+      ctx.beginPath();ctx.arc(sx,fb.y,fb.r,0,Math.PI*2);ctx.fill();
       ctx.fillStyle='rgba(255,255,220,.8)';ctx.beginPath();ctx.arc(sx-fb.r*.35,fb.y-fb.r*.35,fb.r*.45,0,Math.PI*2);ctx.fill();
     }
     ctx.shadowBlur=0;ctx.restore();
@@ -3469,6 +3524,38 @@ function loop(){
       vg.addColorStop(0,'rgba(80,0,0,0)');vg.addColorStop(1,'rgba(120,0,0,.55)');
       ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
     }
+    // Tau Ceti quest destinations
+    for(const rp of[p1,p2]){
+      if(!rp.inShip||!rp.shipQuest)continue;
+      for(const dest of Object.values(rp.shipQuest)){
+        const dx=dest.x-camX;if(dx<-60||dx>W+60)continue;
+        const pulse=Math.sin(tick*.08)*.15;
+        ctx.save();ctx.globalAlpha=dest.reached?0.5:0.85+pulse;
+        // Planet body
+        const pr=dest.label.includes('e')?22:18;
+        const pg=ctx.createRadialGradient(dx-pr*.3,dest.y-pr*.3,0,dx,dest.y,pr);
+        if(dest.label.includes('e')){
+          pg.addColorStop(0,'#b8e4ff');pg.addColorStop(.4,'#60b0e0');pg.addColorStop(1,'#1a5080');
+        }else{
+          pg.addColorStop(0,'#fff9c4');pg.addColorStop(.4,'#ffcc44');pg.addColorStop(1,'#cc8800');
+        }
+        ctx.fillStyle=pg;ctx.shadowColor=dest.color;ctx.shadowBlur=20+pulse*10;
+        ctx.beginPath();ctx.arc(dx,dest.y,pr,0,Math.PI*2);ctx.fill();
+        if(dest.label.includes('e')){
+          ctx.save();ctx.beginPath();ctx.arc(dx,dest.y,pr,0,Math.PI*2);ctx.clip();
+          ctx.fillStyle='rgba(30,120,40,.7)';ctx.beginPath();ctx.ellipse(dx-6,dest.y-5,10,7,tick*.01,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='rgba(30,100,30,.6)';ctx.beginPath();ctx.ellipse(dx+7,dest.y+6,8,5,tick*.015,0,Math.PI*2);ctx.fill();
+          ctx.restore();
+        }
+        ctx.shadowBlur=0;
+        // Label + ring
+        ctx.strokeStyle=dest.reached?'#4ade80':dest.color;ctx.lineWidth=dest.reached?2:1.5+pulse;
+        ctx.setLineDash([4,4]);ctx.beginPath();ctx.arc(dx,dest.y,pr+7,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+        ctx.fillStyle=dest.reached?'#4ade80':dest.color;ctx.font='bold 8px monospace';ctx.textAlign='center';
+        ctx.fillText(dest.reached?'✓ REACHED':dest.label,dx,dest.y-pr-10);
+        ctx.restore();
+      }
+    }
     // Sky rings (Ryland ship mission)
     for(const rp of[p1,p2]){
       if(!rp.inShip||!rp.shipRings)continue;
@@ -3553,22 +3640,37 @@ function loop(){
 
   // Ship mission HUD
   for(const rp of[p1,p2]){
-    if(!rp.inShip||!rp.shipRings)continue;
-    const total=rp.shipRings.length;
-    const done=rp.shipRings.filter(r=>r.hit).length;
-    const hx=rp.num===1?8:W/2+8;
-    ctx.fillStyle='rgba(0,0,0,.65)';ctx.beginPath();ctx.roundRect(hx,H-36,170,28,[6]);ctx.fill();
-    ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=6;
-    ctx.font='bold 11px monospace';ctx.textAlign='left';
-    ctx.fillText('✦ SHIP MISSION: rings '+done+'/'+total,hx+8,H-17);
+    if(!rp.inShip)continue;
+    const hx=rp.num===1?6:W/2+6;
+    const panW=210;
+    ctx.fillStyle='rgba(0,0,20,.8)';ctx.beginPath();ctx.roundRect(hx,H-80,panW,76,[7]);ctx.fill();
+    ctx.strokeStyle='rgba(96,165,250,.4)';ctx.lineWidth=1;ctx.strokeRect(hx,H-80,panW,76);
+    // Fuel bar
+    const fPct=rp.shipFuel/rp.shipMaxFuel;
+    const fCol=fPct>.5?'#ffcc00':fPct>.2?'#ff8800':'#ff3300';
+    ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(hx+8,H-76,panW-16,10);
+    ctx.fillStyle=fCol;ctx.shadowColor=fCol;ctx.shadowBlur=6;
+    ctx.fillRect(hx+8,H-76,(panW-16)*fPct,10);
     ctx.shadowBlur=0;
-    if(done===total){
-      ctx.fillStyle='#60a5fa';ctx.font='bold 9px monospace';
-      ctx.fillText('ALL RINGS CLEARED!  Press Q to land',hx+8,H-6);
-    } else {
-      ctx.fillStyle='#aaa';ctx.font='8px monospace';
-      ctx.fillText('Fly through each glowing ring',hx+8,H-6);
+    ctx.fillStyle='#fff';ctx.font='bold 7px monospace';ctx.textAlign='left';
+    const fmtFuel=(rp.shipFuel/1000000).toFixed(2)+'M / 2.00M ⛽ ASTROPHAGE';
+    ctx.fillText(fmtFuel,hx+8,H-58);
+    // Rings
+    const total=rp.shipRings?rp.shipRings.length:0;
+    const done=rp.shipRings?rp.shipRings.filter(r=>r.hit).length:0;
+    ctx.fillStyle='#ffd700';ctx.shadowColor='#ffd700';ctx.shadowBlur=4;
+    ctx.fillText('✦ RINGS: '+done+'/'+total,hx+8,H-46);
+    ctx.shadowBlur=0;
+    // Tau Ceti quest
+    if(rp.shipQuest){
+      const te=rp.shipQuest.tauE,ts=rp.shipQuest.tauStar;
+      ctx.fillStyle=te.reached?'#4ade80':'#60d8ff';ctx.font='7px monospace';
+      ctx.fillText((te.reached?'✓ ':'○ ')+'TAU CETI e',hx+8,H-34);
+      ctx.fillStyle=ts.reached?'#4ade80':'#ffcc44';
+      ctx.fillText((ts.reached?'✓ ':'○ ')+'TAU CETI ★',hx+112,H-34);
     }
+    ctx.fillStyle='rgba(150,150,200,.7)';ctx.font='7px monospace';
+    ctx.fillText('Q=land  X=fire  coins=+8K fuel',hx+8,H-22);
   }
 
   // Revive prompts (full canvas)
