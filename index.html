@@ -196,6 +196,7 @@ let cam1X=0,cam2X=0;
 let nightMode=false; // N key toggles
 let returnSpawn=null; // where to spawn when exiting a sub-level pipe
 let returnWorld=null; // which level to return to when exiting a sub-level
+let savedLevels={}; // name -> lv snapshot (preserves enemies/qblocks/coins/keys when returning from a sub-level pipe)
 let shakeX=0,shakeY=0;
 function shake(amt=6){shakeX=(Math.random()-.5)*amt*2;shakeY=(Math.random()-.5)*amt*2;}
 let hitFlash=0,hitFlashColor='#ff0000';
@@ -1252,6 +1253,7 @@ function startGame(){
   p2=mkPlayer(3*T,GY-50,2);
   if(gameMode==='1p'){p2.dead=true;p2.outOfLives=true;document.getElementById('hud2').style.display='none';}
   else{document.getElementById('hud2').style.display='flex';}
+  savedLevels={};returnSpawn=null;returnWorld=null;
   loadLevel('1-1');
   stats.kills=0;stats.deaths=0;stats.startTime=Date.now();stats.fireballs=0;stats.coins=0;
   const ids=new Set([p1Char.id,p2Char.id]);
@@ -1265,7 +1267,14 @@ function startGame(){
 }
 
 function loadLevel(name,sx,sy){
-  lv=buildLevel(DEFS[name]);
+  // If we saved this level's state (e.g., player went down a pipe and is now coming back),
+  // restore it so enemies stay dead, q-blocks stay hit, coins stay collected, etc.
+  if(savedLevels[name]){
+    lv=savedLevels[name];
+    delete savedLevels[name];
+  }else{
+    lv=buildLevel(DEFS[name]);
+  }
   fireballs=[];powerups=[];particles=[];popups=[];coinAnims=[];guestJumped=false;
   cpX=0; // reset checkpoint each level so players spawn at level start if not reached
   timer=DIFF[difficulty].timer;timerTick=0;
@@ -1518,6 +1527,7 @@ function updPlayer(p,isP1){
         if(pipe.secret)unlockAchievement('explorer');
         returnSpawn=[pipe.x+T,GY-50]; // remember where to return near this pipe
         returnWorld=lv.name;
+        savedLevels[lv.name]=lv; // preserve current level state so it isn't reset when player comes back
         p.pipeTimer=60;setTimeout(()=>{loadLevel(pipe.dest,...(pipe.spawn||[3*T,GY-50]));p1.invincible=240;if(!p2.dead)p2.invincible=240;},500);return;
       }
       if(pipe.exit&&p.x+p.w>pipe.x+4&&p.x<pipe.x+pipe.w-4&&p.y+p.h>=pipe.y&&p.y+p.h<=pipe.y+T){
